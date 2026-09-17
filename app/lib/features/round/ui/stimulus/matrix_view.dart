@@ -43,11 +43,13 @@ class MatrixView extends StatelessWidget {
   /// Nominal numeral size, before text scaling.
   final double tileSize;
 
+  /// The grid, row by row.
+  ///
+  /// `mainAxisSize.min` on both axes, because the caller wraps this in a
+  /// scaling `FittedBox` and an unbounded column inside one is an overflow
+  /// rather than a smaller grid.
   @override
   Widget build(BuildContext context) {
-    // `mainAxisSize.min` on both axes, because the caller wraps this in a
-    // scaling `FittedBox` and an unbounded column inside one is an overflow
-    // rather than a smaller grid.
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[

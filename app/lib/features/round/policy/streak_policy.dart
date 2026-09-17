@@ -39,7 +39,6 @@ int streakLength({
     return 0;
   }
 
-  // The run may end today or yesterday; anything older is already broken.
   DateTime cursor = played.contains(end) ? end : _previousDay(end);
   if (!played.contains(cursor)) {
     return 0;
@@ -69,6 +68,12 @@ const int weekWindow = 7;
 ///
 /// The same two normalisations apply, for the same reasons: a repeated day
 /// counts once, and a day after [today] is ignored rather than trusted.
+///
+/// **Built backwards from today and then reversed**, rather than walked
+/// forwards from the oldest day. Walking forwards would need a *next day* that
+/// [_previousDay]'s component arithmetic does not provide, and adding one is
+/// how two directions drift apart across a daylight-saving transition — the
+/// defect [_previousDay] exists to describe, reintroduced from the other end.
 List<bool> weekMarks({
   required List<DateTime> attemptDays,
   required DateTime today,
@@ -86,9 +91,6 @@ List<bool> weekMarks({
     marks.add(played.contains(cursor));
     cursor = _previousDay(cursor);
   }
-  // Built backwards from today, then reversed: walking forwards would need a
-  // "next day" that `_previousDay`'s component arithmetic does not provide, and
-  // adding one is how the two directions drift apart across a transition.
   return marks.reversed.toList(growable: false);
 }
 

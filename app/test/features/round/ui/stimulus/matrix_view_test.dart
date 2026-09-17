@@ -7,6 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// The frozen golden: a 3×3 multiplication table with the corner missing.
 const List<int> _table = <int>[1, 2, 3, 2, 4, 6, 3, 6, 9];
 
+/// Pumps the grid the way the app builds it.
+///
+/// Inside a scaling `FittedBox`, which is how `RoundScreen` draws every prompt.
+/// A test that pumps a shape the app never builds is a gate checking something
+/// nobody ships.
 Future<void> _pump(
   WidgetTester tester, {
   List<int> cells = _table,
@@ -17,9 +22,6 @@ Future<void> _pump(
     ..physicalSize = const Size(390, 844)
     ..devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  // Inside a scaling `FittedBox`, which is how `RoundScreen` draws every
-  // prompt. A test that pumps a shape the app never builds is a gate checking
-  // something nobody ships.
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -48,10 +50,10 @@ void main() {
       expect(find.text('?'), findsOneWidget);
     });
 
-    testWidgets('the hidden cell is never drawn', (WidgetTester tester) async {
-      // `cells[8]` is 9 in the frozen golden, and 9 appears nowhere else in the
-      // table — so finding no 9 means the hole really is hiding its value and
-      // not merely that some other tile shows one.
+    testWidgets(
+        'the hidden cell is never drawn — cells[8] is 9 and 9 appears nowhere '
+        'else in the table, so finding none means the hole really hides it',
+        (WidgetTester tester) async {
       await _pump(tester, unknownIndex: 8);
 
       expect(find.text('9'), findsNothing);
@@ -72,12 +74,11 @@ void main() {
   });
 
   group('the cells are laid out in reading order', () {
-    testWidgets('index 1 is right of index 0, index 3 is below it',
+    testWidgets(
+        'index 1 is right of index 0 and index 3 below it, so a row-major '
+        'grid is not transposed — read by position rather than by value, '
+        'because the table is symmetric and the two 2s are alike',
         (WidgetTester tester) async {
-      // The one thing a grid can get wrong that a row cannot: transposition.
-      // `cells` is row-major, so 2 (index 1) sits beside 1 (index 0) and 2
-      // (index 3) sits under it — the table is symmetric, which is why this
-      // uses positions rather than values to tell the two 2s apart.
       await _pump(tester, unknownIndex: 8);
 
       final Offset first = tester.getCenter(find.text('1'));
@@ -96,10 +97,10 @@ void main() {
           reason: 'the column neighbour should share the first column');
     });
 
-    testWidgets('the hole lands where its index says',
+    testWidgets(
+        'the hole lands where its index says — index 2 is top-right, and a '
+        'transposition would put it bottom-left with every count above passing',
         (WidgetTester tester) async {
-      // Index 2 is the top-right cell. Transposing rows and columns would put
-      // it bottom-left instead, and every count above would still pass.
       await _pump(tester, unknownIndex: 2);
 
       final Offset hole = tester.getCenter(find.text('?'));

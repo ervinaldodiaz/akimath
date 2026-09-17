@@ -40,6 +40,10 @@ class AnalogyView extends StatelessWidget {
   /// `como` and not `es a`: the whole reads *"2 es a 4 **como** 5 es a ?"*, and
   /// the chevrons already carry the two `es a`s. Spelling all three out would
   /// put more Spanish on the prompt than arithmetic.
+  ///
+  /// It is set in the eyebrow face rather than the numeral one: the bridge is a
+  /// word joining two statements and must not compete with the four figures it
+  /// sits between.
   static const String bridgeLabel = 'como';
 
   @override
@@ -53,9 +57,6 @@ class AnalogyView extends StatelessWidget {
           size: StatPillSize.hero,
           height: size,
           background: BrandColors.surface,
-          // An eyebrow, not a numeral: the bridge is a word joining two
-          // statements and should not compete with the four figures it sits
-          // between.
           child: Text(
             bridgeLabel.toUpperCase(),
             style: BrandText.eyebrow(size: size * 0.34),

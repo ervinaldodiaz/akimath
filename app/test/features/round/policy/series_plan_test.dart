@@ -36,30 +36,24 @@ void main() {
       }
     });
 
-    test('a pack shorter than a series is not padded', () {
-      // Repeating an item would show a player something they answered ninety
-      // seconds ago and call it a challenge.
+    test('a pack shorter than a series is not padded, because repeating would '
+        'call something answered ninety seconds ago a challenge', () {
       final List<Item> plan = seriesPlan(pack(3));
 
       expect(plan, hasLength(3));
       expect(plan.map((Item i) => i.id).toSet(), hasLength(3));
     });
 
-    test('an empty pack yields an empty plan rather than throwing', () {
-      // `RoundScreen` asserts a non-empty item list, so the caller has to be
-      // able to see this coming. `Pack.fromJson` refuses an empty pack, which
-      // makes this defensive rather than reachable — and one `min` beats a
-      // crash nobody can reproduce.
+    test('an empty pack yields an empty plan rather than throwing, so the '
+        'caller can see it coming instead of meeting an unreproducible crash',
+        () {
       expect(seriesPlan(<Item>[]), isEmpty);
     });
   });
 
   group('the same pack gives the same series', () {
-    test('drawn twice, identical', () {
-      // What a player is about to be asked must not depend on when they asked.
-      // Deterministic on purpose: a shuffle would look adaptive, would not be,
-      // and would hand `f4-calibration` a behaviour to preserve that nobody
-      // chose.
+    test('drawn twice, identical — what a player is about to be asked must not '
+        'depend on when they asked', () {
       final List<Item> source = pack(20);
 
       expect(
@@ -77,9 +71,9 @@ void main() {
       );
     });
 
-    test('a different pack gives a different series', () {
-      // The control: every assertion above is satisfied by a function that
-      // ignores its argument and returns a fixed list.
+    test('a different pack gives a different series — the control, since every '
+        'assertion above is satisfied by a function returning a fixed list',
+        () {
       final List<Item> other = <Item>[item('z0'), item('z1')];
 
       expect(seriesPlan(other).map((Item i) => i.id).toList(), <String>['z0', 'z1']);
@@ -104,9 +98,8 @@ void main() {
       );
     });
 
-    test('it wraps rather than running out', () {
-      // Four series into a pack of twenty and the fifth has to come from
-      // somewhere. Wrapping beats an empty series or a crash.
+    test('it wraps rather than running out, because the fifth series into a '
+        'pack of twenty has to come from somewhere', () {
       final List<Item> source = pack(20);
 
       expect(
@@ -123,9 +116,8 @@ void main() {
       );
     });
 
-    test('no item repeats inside one series', () {
-      // Wrapping must not hand the same item twice in one sitting, which it
-      // would the moment a pack is shorter than a series.
+    test('no item repeats inside one series, which wrapping would do the '
+        'moment a pack is shorter than a series', () {
       for (final int size in <int>[5, 6, 20]) {
         for (int from = 0; from < size; from++) {
           final List<Item> plan = seriesPlan(pack(size), from: from);
@@ -149,19 +141,15 @@ void main() {
       expect(seriesPlan(<Item>[], from: 9), isEmpty);
     });
 
-    test('a negative offset is refused rather than reinterpreted', () {
-      // `-1 % 20` is 19 in Dart, so a negative offset would silently start near
-      // the end of the pack instead of failing.
+    test('a negative offset is refused rather than reinterpreted, since -1 % 20 '
+        'is 19 in Dart and would silently start near the end of the pack', () {
       expect(() => seriesPlan(pack(20), from: -1), throwsRangeError);
     });
   });
 
   group('the positions the series is drawn from', () {
-    test('are the ones the items come from, so nothing recomputes the wrap', () {
-      // A synced attempt names `(packId, index)` — the pack format gives its
-      // items no identifier, so position *is* identity. A caller deriving it
-      // separately would be a second implementation of the one rule that says
-      // which item a player just answered.
+    test('are the ones the items come from, so nothing recomputes the wrap — a '
+        'synced attempt names (packId, index) and position is identity', () {
       final List<Item> nine = pack(9);
 
       for (final int from in <int>[0, 1, 5, 8, 9, 14]) {

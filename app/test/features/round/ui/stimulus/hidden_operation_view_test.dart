@@ -40,18 +40,13 @@ Future<void> _pump(
 
 void main() {
   group('nothing between two numbers reads as arithmetic', () {
-    testWidgets('the machine joins them with an arrow, not a chevron',
+    testWidgets(
+        'the mark between two numbers is mapsTo and never forward, asked of '
+        'the glyph rather than of a character — a chevron set between numerals '
+        'reads as the false claim 2 > 4',
         (WidgetTester tester) async {
-      // `2 › 4` is indistinguishable from `2 > 4`, which is false — and this is
-      // the one screen where a player is being asked to read a relationship off
-      // the numbers in front of them.
       await _pump(tester);
 
-      // **Asked of the glyph, not of a character.** These lines used to read
-      // `find.text('→')`, which was true of the stand-in and says nothing now
-      // that a glyph is geometry. What has to hold is unchanged: the mark
-      // between the two numbers is `mapsTo` — *becomes* — and never `forward`,
-      // whose stand-in `›` set between numerals reads as `>`.
       expect(find.text('›'), findsNothing);
       expect(find.text('>'), findsNothing);
 
@@ -80,8 +75,8 @@ void main() {
 
       expect(find.text('9'), findsOneWidget);
       expect(find.text('?'), findsOneWidget);
-      // Two examples plus the query: three rows, two tiles each.
-      expect(find.byType(CandySurface), findsNWidgets(6));
+      expect(find.byType(CandySurface), findsNWidgets(6),
+          reason: 'two examples plus the query: three rows, two tiles each');
     });
 
     testWidgets('a third example makes a third row',
@@ -101,11 +96,11 @@ void main() {
   });
 
   group('the query is below the examples, not among them', () {
-    testWidgets('the hole sits under every worked output',
+    testWidgets(
+        'the hole sits under every worked output, which is what makes it a '
+        'question rather than a fourth example — an interleaved layout would '
+        'still draw six tiles and still find every value',
         (WidgetTester tester) async {
-      // The claim that makes it a question rather than a fourth example. A
-      // layout that interleaved the query would still draw six tiles and still
-      // find every value.
       await _pump(tester);
 
       final double hole = tester.getCenter(find.text('?')).dy;
@@ -117,10 +112,11 @@ void main() {
           reason: 'the query input shares its row with the hole');
     });
 
-    testWidgets('each example keeps its input beside its own output',
+    testWidgets(
+        'each example keeps its input beside its own output, because '
+        'transposing the rows would pair 2 with 16 — a different and '
+        'unsolvable question',
         (WidgetTester tester) async {
-      // Transposing the rows would pair 2 with 16, which is a different — and
-      // unsolvable — question.
       await _pump(tester);
 
       expect(tester.getCenter(find.text('2')).dy,
@@ -147,10 +143,11 @@ void main() {
   });
 
   group('Aki is not here', () {
-    testWidgets('nothing in the machine draws her', (WidgetTester tester) async {
-      // `CLAUDE.md`: she does not appear while the learner is solving. The
-      // implementation plan sketches this family "with Aki's tail curl", so
-      // this is the assertion that keeps the sketch from quietly winning.
+    testWidgets(
+        'nothing in the machine draws her, because she does not appear while '
+        'the learner is solving — the implementation plan sketches this family '
+        'with her tail curl, and the invariant outranks the sketch',
+        (WidgetTester tester) async {
       await _pump(tester);
 
       expect(find.bySemanticsLabel('Aki'), findsNothing);

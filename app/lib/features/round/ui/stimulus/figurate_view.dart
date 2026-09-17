@@ -56,6 +56,11 @@ class FigurateView extends StatelessWidget {
     );
   }
 
+  /// One box: either the figure's dots, or the `?` that stands for the hole.
+  ///
+  /// The hole draws a `?` rather than an empty box, because a blank square
+  /// beside three dotted ones reads as a figure of zero rather than as the
+  /// question.
   Widget _figure(int index) {
     final bool unknown = index == unknownIndex;
     final TermVisual visual = resolveTermVisual(
@@ -73,8 +78,6 @@ class FigurateView extends StatelessWidget {
         width: boxSize,
         height: boxSize,
         child: unknown
-            // A `?`, not an empty box: a blank square beside three dotted ones
-            // reads as a figure of zero rather than as the question.
             ? Center(
                 child: Text('?', style: BrandText.numeral(boxSize * 0.62)),
               )
@@ -92,6 +95,9 @@ class FigurateView extends StatelessWidget {
 /// Named rather than private so a test can read back the [layout] each box was
 /// handed. Four boxes sharing one layout would draw four identical figures,
 /// leaving no rule to find, and every count assertion would still pass.
+///
+/// The shortest side scales **both** axes, so a figure keeps the shape the spec
+/// laid out even when the box it is given is not square.
 @visibleForTesting
 class FigurateDotsPainter extends CustomPainter {
   const FigurateDotsPainter(this.layout);
@@ -100,13 +106,15 @@ class FigurateDotsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // One scale for both axes, so a figure stays the shape the spec laid out
-    // even when the box is not square.
-    final double scale = size.shortestSide;
+    final double scaleForBothAxes = size.shortestSide;
     final Paint paint = Paint()..color = BrandColors.ink;
 
     for (final Offset dot in layout.dots) {
-      canvas.drawCircle(dot.scale(scale, scale), layout.radius * scale, paint);
+      canvas.drawCircle(
+        dot.scale(scaleForBothAxes, scaleForBothAxes),
+        layout.radius * scaleForBothAxes,
+        paint,
+      );
     }
   }
 

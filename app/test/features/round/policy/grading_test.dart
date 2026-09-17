@@ -33,24 +33,17 @@ void main() {
       expect(grade(_threeQuarters, ' 5/4 '), Verdict.correct);
     });
 
-    test('leading zeros do not change the verdict', () {
-      // The learner form strips them; the frozen fixture says 007 is 7.
+    test('the learner form strips leading zeros, so 007 is 7', () {
       expect(grade(_threeQuarters, '05/4'), Verdict.correct);
     });
 
-    test('a fraction is not reduced, so 10/8 is not 5/4', () {
-      // Deliberate: deciding those are the same answer is a pedagogical call
-      // the contract does not make.
+    test('a fraction is not reduced, because calling 10/8 and 5/4 the same '
+        'answer is a pedagogical call the contract does not make', () {
       expect(grade(_threeQuarters, '10/8'), Verdict.wrong);
     });
 
-    test('a hyphen-minus is read as a minus sign', () {
-      // The keypad cannot emit U+002D, but a future paste path or a fixture
-      // written by hand can. Canonicalising here means the two never disagree.
-      // Storage is ASCII: `-7` is the canonical form and `−7` is not, which
-      // stored mode refuses rather than quietly fixing. The keypad emits U+2212
-      // and the learner form folds it, so both spellings grade correct from the
-      // player's side — which is the whole shape of the contract.
+    test('both spellings of a minus grade correct, because storage is ASCII '
+        'and the keypad emits U+2212', () {
       const Item negative = Item(
         id: 'demo-2',
         stimulus: ArithmeticStimulus(<PromptToken>[PromptToken.text('2 − 9')]),
@@ -71,17 +64,16 @@ void main() {
       expect(grade(_threeQuarters, ''), Verdict.wrong);
     });
 
-    test('an unparseable answer is wrong rather than an error', () {
-      // Things a player can actually produce. The round has no error state for
-      // them, so they are simply not the answer (DR-K4).
+    test('an answer a player can produce but nothing can parse is wrong '
+        'rather than an error, because the round has no error state (DR-K4)',
+        () {
       for (final String nonsense in <String>['1/0', 'x+1', '−']) {
         expect(grade(_threeQuarters, nonsense), Verdict.wrong);
       }
     });
 
-    test('an expected answer that is not canonical never grades correct', () {
-      // A fixture written with a non-canonical answer is broken, and it says so
-      // at grading time rather than grading correctly by accident.
+    test('an expected answer that is not canonical never grades correct, so a '
+        'broken fixture says so instead of passing by accident', () {
       const Item broken = Item(
         id: 'broken',
         stimulus: ArithmeticStimulus(<PromptToken>[PromptToken.text('1 + 1')]),

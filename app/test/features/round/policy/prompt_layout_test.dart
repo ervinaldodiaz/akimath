@@ -18,13 +18,9 @@ void main() {
       expect(row.children[2], isA<NumeralNode>());
     });
 
-    test('a fraction keeps its numerator and denominator, in that order', () {
-      // The branch with structure, and the one nothing asserted while this
-      // lived on the widget: the round tests build items from text and
-      // operators, and the gates that pump the registry's fraction item check
-      // blur, overflow and text decoration rather than tree shape. A swapped
-      // numerator would have rendered a different question with every test
-      // green.
+    test('a fraction keeps its numerator and denominator, in that order — the '
+        'one branch with structure, and a swap would render a different '
+        'question with every other gate green', () {
       final FractionNode fraction = (nodeForTokens(<PromptToken>[
         const PromptToken.fraction(numerator: '3', denominator: '4'),
       ]) as RowNode)
@@ -59,11 +55,8 @@ void main() {
       expect((row.children[1] as OperatorNode).face, MathFace.textHeavy);
     });
 
-    test('a solidus in a prompt is refused rather than drawn inline', () {
-      // Reachable only from a prompt built in code: `Pack.fromJson` refuses a
-      // solidus at load now, and so does `stimulus_reader`. This is the floor
-      // under both — the compositor has no way to express an inline fraction,
-      // so it declines rather than drawing something else.
+    test('a solidus in a prompt is refused rather than drawn inline, because '
+        'the compositor cannot express an inline fraction', () {
       expect(
         () => nodeForTokens(<PromptToken>[const PromptToken.operator('/')]),
         throwsA(isA<ArgumentError>()),

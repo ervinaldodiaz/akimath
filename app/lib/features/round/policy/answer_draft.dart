@@ -62,12 +62,20 @@ class AnswerDraft {
     if (text.length >= maxLength) {
       return this;
     }
-    if (character == minusSign && text.isNotEmpty) {
-      // A minus is a sign, not an operator: it means something only in front.
+    if (_minusArrivingWhereItIsNotASign(character)) {
       return this;
     }
     return AnswerDraft('$text$character');
   }
+
+  /// Whether [character] is a minus sign arriving somewhere it cannot mean
+  /// anything.
+  ///
+  /// A minus is a sign and not an operator: it reads only in front of the
+  /// digits, so one typed after anything at all is a keypress with no meaning
+  /// rather than a subtraction.
+  bool _minusArrivingWhereItIsNotASign(String character) =>
+      character == minusSign && text.isNotEmpty;
 
   AnswerDraft backspace() =>
       text.isEmpty ? this : AnswerDraft(text.substring(0, text.length - 1));

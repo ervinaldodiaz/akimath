@@ -1,3 +1,17 @@
+/// The streak policy, and the daylight-saving defect it was fixed for.
+///
+/// **The DST cases pass vacuously in a zone without one**, which includes
+/// `America/Mexico_City` (abolished 2022) and the UTC that CI defaults to.
+/// `.github/workflows/ci.yml` therefore runs this file a second time under
+/// `TZ=America/Tijuana`; without that run, the bug they cover is invisible to
+/// the suite. Tijuana and Ciudad Juárez are Mexican DST zones, so this is the
+/// target audience and not a travelling device.
+///
+/// What it cost before the fix: a player with a 30-day run, opening the app on
+/// the morning of 9 March 2026, saw **0** on the home and then **29** on the
+/// verdict screen. Two screens, one morning, neither number right.
+library;
+
 import 'package:akimath_app/features/round/policy/streak_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,13 +32,13 @@ void main() {
       );
     });
 
-    test('a gap ends the streak at the run that reaches today', () {
+    test('a gap ends the streak at the run that reaches today, so the 12th and '
+        '13th being missed leaves the 14th and 15th', () {
       expect(
         streakLength(
           attemptDays: <DateTime>[
             day(2026, 8, 10),
             day(2026, 8, 11),
-            // 12th and 13th missed.
             day(2026, 8, 14),
             day(2026, 8, 15),
           ],
@@ -34,9 +48,8 @@ void main() {
       );
     });
 
-    test('having played yesterday but not today keeps the streak alive', () {
-      // The day is not over. A streak that reset at midnight would punish a
-      // child for opening the app in the morning.
+    test('having played yesterday but not today keeps the streak alive, '
+        'because the day is not over until it is over', () {
       expect(
         streakLength(
           attemptDays: <DateTime>[day(2026, 8, 13), day(2026, 8, 14)],
@@ -106,9 +119,8 @@ void main() {
   });
 
   group('what a streak never does', () {
-    test('a wrong answer does not decrement it', () {
-      // Q7, decided: the streak counts days played, not days won. The policy
-      // never sees a verdict — which is how it cannot punish one.
+    test('a wrong answer does not decrement it, because the policy is never '
+        'given a verdict at all (Q7)', () {
       expect(
         streakLength(
           attemptDays: <DateTime>[day(2026, 8, 14), day(2026, 8, 15)],
@@ -118,9 +130,8 @@ void main() {
       );
     });
 
-    test('it reads no clock of its own', () {
-      // `today` is an argument. Two different todays over the same attempts
-      // must disagree, which a module reaching for DateTime.now() cannot do.
+    test('it reads no clock of its own, so two different todays over the same '
+        'attempts disagree — which DateTime.now() could not do', () {
       final List<DateTime> attempts = <DateTime>[
         day(2026, 8, 14),
         day(2026, 8, 15),
@@ -131,8 +142,8 @@ void main() {
       );
     });
 
-    test('a future attempt does not extend the streak', () {
-      // A device whose clock jumped forward and back should not mint days.
+    test('a future attempt does not extend the streak, so a clock that jumped '
+        'forward and back mints no days', () {
       expect(
         streakLength(
           attemptDays: <DateTime>[day(2026, 8, 15), day(2026, 12, 25)],
@@ -144,23 +155,17 @@ void main() {
   });
 
   group('a daylight-saving transition does not break a streak', () {
-    // **These pass vacuously in a zone without DST**, which includes
-    // `America/Mexico_City` (abolished 2022) and the UTC that CI defaults to.
-    // `.github/workflows/ci.yml` therefore runs this file a second time under
-    // `TZ=America/Tijuana`; without that run, the bug they cover is invisible
-    // to the suite. Tijuana and Ciudad Juárez are Mexican DST zones, so this is
-    // the target audience and not a travelling device.
-    //
-    // What it cost before the fix: a child with a 30-day run, opening the app
-    // on the morning of 9 March 2026, saw **0** on the home and then **29** on
-    // the verdict screen. Two screens, one morning, neither number right.
+    /// An unbroken run of [count] local calendar days ending at [last].
+    ///
+    /// Component arithmetic, like the policy's own: a `Duration` step would
+    /// build the very run the transition breaks.
     List<DateTime> consecutiveDaysEnding(DateTime last, int count) => <DateTime>[
           for (int i = 0; i < count; i++)
             DateTime(last.year, last.month, last.day - i),
         ];
 
-    test('the grace path survives spring forward', () {
-      // Played through the 8th, opens the app on the 9th before playing.
+    test('the grace path survives spring forward, for a player who played '
+        'through the 8th and opens the app on the 9th before playing', () {
       expect(
         streakLength(
           attemptDays: consecutiveDaysEnding(day(2026, 3, 8), 30),
@@ -170,8 +175,8 @@ void main() {
       );
     });
 
-    test('the counting loop survives spring forward', () {
-      // Played through the 9th, including today.
+    test('the counting loop survives spring forward, for a player who played '
+        'through the 9th including today', () {
       expect(
         streakLength(
           attemptDays: consecutiveDaysEnding(day(2026, 3, 9), 30),
@@ -191,9 +196,8 @@ void main() {
       );
     });
 
-    test('every day of a DST year counts a five-day run as five', () {
-      // A sweep, because a single date proves one transition and there are two
-      // a year in every zone that has them.
+    test('every day of a DST year counts a five-day run as five — a sweep, '
+        'because a single date proves one of the two transitions a year', () {
       for (int dayOfYear = 5; dayOfYear < 365; dayOfYear++) {
         final DateTime today = DateTime(2026, 1, dayOfYear);
         expect(
@@ -228,9 +232,8 @@ void _weekMarksTests() {
       expect(weekMarks(attemptDays: <DateTime>[], today: day(15)), hasLength(7));
     });
 
-    test('nothing played is seven unplayed marks', () {
-      // The band must not disappear when it has nothing to say, or the layout
-      // moves under a player on their first morning.
+    test('nothing played is seven unplayed marks, so the band does not vanish '
+        'and move the layout under a player on their first morning', () {
       expect(weekMarks(attemptDays: <DateTime>[], today: day(15)), everyElement(isFalse));
     });
 
@@ -241,9 +244,8 @@ void _weekMarksTests() {
       );
     });
 
-    test('a gap in the middle is visible, which is the point', () {
-      // A total cannot say *which* day was missed. That is the fact the strip
-      // exists to carry.
+    test('a gap in the middle is visible, which is the one fact a total cannot '
+        'carry and the whole reason the strip exists', () {
       expect(
         weekMarks(attemptDays: <DateTime>[day(13), day(15)], today: day(15)),
         <bool>[false, false, false, false, true, false, true],
@@ -266,9 +268,8 @@ void _weekMarksTests() {
       expect(weekMarks(attemptDays: <DateTime>[day(8)], today: day(15)), everyElement(isFalse));
     });
 
-    test('a day in the future is ignored, not trusted', () {
-      // The same rule `streakLength` follows: a clock that jumped forward and
-      // back must not mint days.
+    test('a day in the future is ignored and not trusted, the same rule '
+        'streakLength follows', () {
       expect(
         weekMarks(attemptDays: <DateTime>[day(16), day(20)], today: day(15)),
         everyElement(isFalse),
@@ -292,16 +293,9 @@ void _weekMarksTests() {
       );
     });
 
-    test('it crosses a daylight-saving boundary without losing a day', () {
-      // **Vacuous in a zone without DST**, like the group above — CI runs this
-      // file a second time under `TZ=America/Tijuana`, and without that run the
-      // bug is invisible here.
-      //
-      // **Today is the 9th, not the 8th.** Tijuana springs forward at 02:00 on
-      // 2026-03-08, so a walk that starts on the 8th never crosses the
-      // transition and a `Duration` step looks correct. Starting on the 9th,
-      // 24 hours before local midnight lands at 23:00 on the 7th and the day
-      // is simply missed — which is the morning the incident describes.
+    test('it crosses a daylight-saving boundary without losing a day, measured '
+        'from the 9th and not the 8th — Tijuana springs forward at 02:00 on '
+        'the 8th, so a walk starting there never crosses the transition', () {
       expect(
         weekMarks(
           attemptDays: <DateTime>[for (int d = 3; d <= 9; d++) DateTime(2026, 3, d)],

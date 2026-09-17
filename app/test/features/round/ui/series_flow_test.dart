@@ -25,6 +25,12 @@ class _FakeBundle extends CachingAssetBundle {
       ByteData.sublistView(utf8.encode(source));
 }
 
+/// Item ids run `a0`..`a7` and item `aN` wants `N + 1`, so the sixth wants 6.
+const String _answerToTheSixthItem = '6';
+
+/// Anything but the `1` the first item wants.
+const String _wrongAnswerToTheFirstItem = '9';
+
 /// A pack of eight, so a five-item series is genuinely a subset.
 String _pack(int count) {
   final List<String> items = List<String>.generate(
@@ -51,6 +57,14 @@ String _pack(int count) {
   "items": [${items.join(',')}]
 }
 ''';
+}
+
+/// Unmounts, then mounts again over the same storage — the only thing that
+/// makes the second mount a launch rather than a rebuild.
+Future<void> _relaunchOverTheSameStorage(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pumpAndSettle();
+  await _pump(tester);
 }
 
 Future<void> _pump(WidgetTester tester, {int packSize = 8}) async {
@@ -117,11 +131,10 @@ void main() {
       expect(find.byType(Keypad), findsNothing);
     });
 
-    testWidgets('it does not wrap back to the first item',
+    testWidgets(
+        'it does not wrap back to the first item, which a test that only '
+        'counted to five would miss for a round that then offered a sixth',
         (WidgetTester tester) async {
-      // The behaviour before this change: `_next` took the index modulo the
-      // item list and played forever. A test that only counts to five would
-      // pass for a round that then offered a sixth.
       await _pump(tester);
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
@@ -144,10 +157,10 @@ void main() {
         await _answer(tester, i);
       }
 
-      // **The ring, not `5 de 5`.** The words are `SeriesSummaryScreen`'s
-      // fallback for a caller that hands over no outcomes, and `HomeRoute`
-      // hands over the round's — so the score is now one mark per item.
-      expect(_marks(tester, Verdict.correct), 5);
+      expect(_marks(tester, Verdict.correct), 5,
+          reason: 'the ring and not "5 de 5" — the words are the fallback for '
+              'a caller that hands over no outcomes, and HomeRoute hands the '
+              "round's over");
       expect(_marks(tester, Verdict.wrong), 0);
 
       await tester.tap(find.text('Volver al inicio'));
@@ -157,14 +170,16 @@ void main() {
       expect(find.byType(SeriesSummaryScreen), findsNothing);
     });
 
-    testWidgets('a wrong answer is counted as such', (WidgetTester tester) async {
-      // The control: five correct marks above is also what a screen drawing
-      // one mark per item regardless of its verdict would draw.
+    testWidgets(
+        'a wrong answer is counted as such — the control, since five correct '
+        'marks above is also what a screen drawing one mark per item '
+        'regardless of its verdict would draw',
+        (WidgetTester tester) async {
       await _pump(tester);
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
 
-      await _press(tester, '9'); // item 1 wants 1
+      await _press(tester, _wrongAnswerToTheFirstItem);
       await _press(tester, 'submit');
       await tester.pumpAndSettle();
       await tester.tap(find.text('Intentar otro'));
@@ -174,11 +189,9 @@ void main() {
         await _answer(tester, i);
       }
 
-      // And the ring says *which* one, which `4 de 5` never could — that half
-      // is asserted in `home_route_test.dart`, over a pack that carries the
-      // misconception copy this fixture deliberately does not.
       expect(_marks(tester, Verdict.correct), 4);
-      expect(_marks(tester, Verdict.wrong), 1);
+      expect(_marks(tester, Verdict.wrong), 1,
+          reason: 'the ring says which one, which "4 de 5" never could');
     });
   });
 
@@ -194,24 +207,18 @@ void main() {
       await tester.tap(find.text('Volver al inicio'));
       await tester.pumpAndSettle();
 
-      // The home re-reads the store rather than holding a number it computed
-      // once, which is what makes the streak visible without a relaunch.
-      //
-      // **Named, not a bare `1`** (PROC-11). This asserted `find.text('1')`
-      // and passed on the `1` in the preview card's `1 + 0 =` — the day the
-      // card started previewing the *plan*, the preview became `6 + 0 =`, the
-      // assertion went red, and the streak it claims to check had never been
-      // read by it at all.
       expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.text('1 DÍA'), findsOneWidget);
+      expect(find.text('1 DÍA'), findsOneWidget,
+          reason: 'the whole label and never a bare "1", which would pass on '
+              "the preview card's arithmetic instead (PROC-11)");
     });
   });
 
   group('a second series is not the first series again', () {
-    testWidgets('the next series starts where the last one stopped',
+    testWidgets(
+        'the next series starts where the last one stopped — a pack of eight, '
+        'five served, so the second series opens on the sixth',
         (WidgetTester tester) async {
-      // The first thing anyone would notice: a pack of eight, five served, and
-      // the second series has to open on the sixth.
       await _pump(tester);
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
@@ -224,8 +231,7 @@ void main() {
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
 
-      // Item ids run a0..a7 and item aN wants N+1, so the sixth wants 6.
-      await _press(tester, '6');
+      await _press(tester, _answerToTheSixthItem);
       await _press(tester, 'submit');
       await tester.pumpAndSettle();
 
@@ -236,9 +242,10 @@ void main() {
       );
     });
 
-    testWidgets('and it survives a relaunch', (WidgetTester tester) async {
-      // Advancing only in memory would give the same five every time the app
-      // opened, which is the behaviour this exists to end.
+    testWidgets(
+        'and it survives a relaunch, since advancing only in memory would give '
+        'the same five every time the app opened',
+        (WidgetTester tester) async {
       await _pump(tester);
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
@@ -248,26 +255,22 @@ void main() {
       await tester.tap(find.text('Volver al inicio'));
       await tester.pumpAndSettle();
 
-      // Unmount, then mount again over the same storage — the only thing that
-      // makes this a launch rather than a rebuild.
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-      await _pump(tester);
+      await _relaunchOverTheSameStorage(tester);
 
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();
-      await _press(tester, '6');
+      await _press(tester, _answerToTheSixthItem);
       await _press(tester, 'submit');
       await tester.pumpAndSettle();
 
       expect(find.text('Siguiente'), findsOneWidget);
     });
 
-    testWidgets('leaving a series halfway does not consume its items',
+    testWidgets(
+        'leaving a series halfway does not consume its items, because the '
+        'cursor advances on finishing — a player who closed after one item has '
+        'not been served five in any sense worth remembering',
         (WidgetTester tester) async {
-      // The cursor advances on *finishing*. A player who closes a series after
-      // one item has not been served five of them in any sense worth
-      // remembering.
       await _pump(tester);
       await tester.tap(find.text('Empezar la serie'));
       await tester.pumpAndSettle();

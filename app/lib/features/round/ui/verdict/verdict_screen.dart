@@ -52,7 +52,11 @@ class VerdictSummary {
 /// what a wrong answer costs.
 ///
 /// The verdict itself is carried by `VerdictRing`: shape and glyph first, hue
-/// second, so it survives a reader who cannot separate green from coral.
+/// second, so it survives a reader who cannot separate green from coral. That
+/// is BRD-1 — deuteranopia collapses `#5ED6A4` and `#FF8A5B`, so `Verdict`
+/// carries an outline and a glyph and no colour at all, and this screen has to
+/// reach for a shape because a shape is all there is.
+/// `test/architecture/verdict_is_not_a_colour_test.dart` is the gate.
 class VerdictScreen extends StatelessWidget {
   const VerdictScreen({
     super.key,
@@ -77,6 +81,15 @@ class VerdictScreen extends StatelessWidget {
   static const double _bandHeight = 156;
   static const double _akiWidth = 182;
 
+  /// Aki, the ring, the headline, the diagnosis and the two tiles.
+  ///
+  /// **The middle scrolls and the button does not.** Four steps of diagnosis at
+  /// `textScaler` 1.3 overflow by 78 px, and shrinking the copy until it fits
+  /// would make the screen worse for exactly the readers who chose large text —
+  /// the home's design D2, in the one other place the argument applies. The
+  /// middle stays centred when there is room, so the common case looks as it
+  /// did, and the button sits last so nothing is below the thing the screen is
+  /// asking for.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,12 +109,6 @@ class VerdictScreen extends StatelessWidget {
                   child: const BrandIcon(BrandGlyph.close, size: 22),
                 ),
               ),
-              // **It scrolls, and the button does not.** Four steps of
-              // diagnosis at `textScaler` 1.3 overflow by 78 px, and shrinking
-              // the copy until it fits would make the screen worse for exactly
-              // the readers who chose large text — the home's design D2, in the
-              // one other place the argument applies. The middle stays centred
-              // when there is room, so the common case looks as it did.
               Expanded(
                 child: LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
@@ -116,19 +123,7 @@ class VerdictScreen extends StatelessWidget {
                             const SizedBox(height: BrandShape.space4),
                             VerdictRing(summary.verdict),
                             const SizedBox(height: BrandShape.space3),
-                            // From `verdict_copy.dart`, the one place the two
-                            // headlines live — `4.5`'s legend reads the same
-                            // strings, so the key cannot teach a word this
-                            // screen does not say.
-                            //
-                            // The wrong case lost its second sentence, "Mira
-                            // cómo va.": the diagnosis steps below now say
-                            // exactly that, concretely, instead of promising
-                            // it.
-                            Text(
-                              verdictHeadline(summary.verdict),
-                              style: BrandText.cardTitle(size: 22),
-                            ),
+                            _headline(),
                             if (_steps.isNotEmpty) ...<Widget>[
                               const SizedBox(height: BrandShape.space3),
                               _stepList(),
@@ -143,7 +138,6 @@ class VerdictScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: BrandShape.space3),
-              // Last, so nothing sits below the thing the screen is asking for.
               BrandButton.primary(
                 label: _correct ? 'Siguiente' : 'Intentar otro',
                 onPressed: onContinue,
@@ -154,6 +148,18 @@ class VerdictScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// The one line that names the mood, from `verdict_copy.dart`.
+  ///
+  /// That file is the one place the two headlines live — `4.5`'s legend reads
+  /// the same strings, so the key cannot teach a word this screen does not say.
+  ///
+  /// The wrong case lost its second sentence, *"Mira cómo va."*: the diagnosis
+  /// steps below now say exactly that, concretely, instead of promising it.
+  Widget _headline() => Text(
+        verdictHeadline(summary.verdict),
+        style: BrandText.cardTitle(size: 22),
+      );
 
   /// The steps to show, if any. A correct answer never has them.
   List<String> get _steps =>
