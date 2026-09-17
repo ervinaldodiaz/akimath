@@ -134,12 +134,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   @override
   void initState() {
     super.initState();
-    // Read now rather than when `0.4` is reached: a player crosses two screens
-    // first, so the probe is ready long before it is wanted and nothing on the
-    // path has to draw a wait. There is no spinner in this app to draw one with.
     _readProbe();
   }
 
+  /// Reads the pack and plans the probe.
+  ///
+  /// **Called when the flow mounts, not when `0.4` is reached.** A player
+  /// crosses two screens first, so the probe is ready long before it is wanted
+  /// and nothing on the path has to draw a wait. There is no spinner in this
+  /// app to draw one with.
+  ///
+  /// The `catch` is **deliberately broad, and reports rather than swallows** —
+  /// the same rule `OnboardingStore` states: nothing about the stored or
+  /// bundled content may prevent a launch, and that is wider than the exception
+  /// hierarchy. The consequence is visible and honest: with no items, the three
+  /// probe screens are skipped.
   Future<void> _readProbe() async {
     try {
       final Pack pack = await widget.reader.load();
@@ -147,11 +156,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         setState(() => _probe = calibrationPlan(pack.items));
       }
     } catch (error) {
-      // **Deliberately broad, and reported rather than swallowed** — the same
-      // rule `OnboardingStore` states: nothing about the stored or bundled
-      // content may prevent a launch, and that is wider than the exception
-      // hierarchy. The consequence is visible and honest: with no items, the
-      // three probe screens are skipped.
       debugPrint('onboarding: could not read the pack for the probe ($error)');
     }
   }
@@ -170,6 +174,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   /// Remembers one probe answer the way a practice round's is remembered.
   ///
+  /// **Called as each item is answered, not once at the end.** The outcome
+  /// carries totals, and it deliberately carries no list of verdicts:
+  /// `ProbeStrip` is built so that nothing on `0.5` can say how the player is
+  /// doing, and handing `0.6` a per-item verdict would be the same leak by
+  /// another door. Recording as it goes also keeps what a player answered
+  /// before closing the app.
+  ///
   /// Not awaited, the same as `HomeRoute`'s: a profile figure is not worth
   /// holding up the next item for, and the store already reports a write it
   /// could not make.
@@ -179,12 +190,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         ),
       );
 
+  /// The probe is behind the player, and the cursor moves by **what was
+  /// answered, not by what was planned**.
+  ///
+  /// The cursor counts items *served*, so a probe left after four advances by
+  /// four and the other six are still the player's to meet. Not awaited: the
+  /// home re-reads the cursor on its own launch, and a write that failed costs
+  /// a repeat rather than a stuck screen.
   void _afterProbe(CalibrationOutcome outcome) {
-    // **What was answered, not what was planned.** The cursor counts items
-    // *served*, so a probe left after four advances by four and the other six
-    // are still the player's to meet. Not awaited: the home re-reads the cursor
-    // on its own launch, and a write that failed costs a repeat rather than a
-    // stuck screen.
     unawaited(widget.seriesCursor.advance(outcome.answered));
     setState(() {
       _outcome = outcome;
@@ -196,64 +209,74 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   @override
   Widget build(BuildContext context) => switch (_step) {
-        OnboardingStep.welcome => AppShell(
-            child: WelcomeScreen(
-              onStart: () => _to(OnboardingStep.teachingItem),
-            ),
-          ),
-        OnboardingStep.teachingItem => PopScope(
-            // The close control and the system gesture do the same thing: back
-            // to the welcome. Without this they would differ — one returning,
-            // one quitting the app.
-            canPop: false,
-            onPopInvokedWithResult: (bool didPop, Object? result) {
-              if (!didPop) {
-                _to(OnboardingStep.welcome);
-              }
-            },
-            child: FirstItemScreen(
-              onFinished: _afterTeachingItem,
-              onBack: () => _to(OnboardingStep.welcome),
-            ),
-          ),
-        OnboardingStep.calibrationIntro => AppShell(
-            child: CalibrationIntroScreen(
-              onStart: () => _to(OnboardingStep.probe),
-              onSkip: () => _to(OnboardingStep.saveProgress),
-            ),
-          ),
-        // Bare, like the teaching item: it brings its own `Scaffold`.
-        OnboardingStep.probe => CalibrationItemScreen(
-            items: _probe,
-            onFinished: _afterProbe,
-            // **As each item is answered, not once at the end.** The outcome
-            // carries totals, and it deliberately carries no list of verdicts:
-            // `ProbeStrip` is built so that nothing on `0.5` can say how the
-            // player is doing, and handing `0.6` a per-item verdict would be
-            // the same leak by another door. Recording as it goes also keeps
-            // what a player answered before closing the app.
-            onGraded: _recordAnswer,
-          ),
-        OnboardingStep.result => AppShell(
-            child: CalibrationResultScreen(
-              outcome: _outcome,
-              onEnter: () => _to(OnboardingStep.saveProgress),
-            ),
-          ),
-        OnboardingStep.saveProgress => AppShell(
-            child: SaveProgressScreen(
-              // The teaching item plus every probe item answered. Both were
-              // graded on the device, so both are challenges this player did.
-              challenges: 1 + _outcome.answered,
-              // **Zero, and the tile is therefore absent.** Neither the
-              // teaching item nor the probe passes a `DayLogStore`, so the home
-              // behind this screen will read no days practised — and a tile
-              // saying `1 DÍA` would be contradicted one tap later, which is
-              // the `RACHA 1` defect in its other direction.
-              days: 0,
-              onCreateAccount: widget.onCreateAccount,
-              onLater: widget.onComplete,
-            ),
-          ),
+        OnboardingStep.welcome => _welcome(),
+        OnboardingStep.teachingItem => _teachingItem(),
+        OnboardingStep.calibrationIntro => _calibrationIntro(),
+        OnboardingStep.probe => _probeItem(),
+        OnboardingStep.result => _calibrationResult(),
+        OnboardingStep.saveProgress => _saveProgress(),
       };
+
+  Widget _welcome() => AppShell(
+        child: WelcomeScreen(onStart: () => _to(OnboardingStep.teachingItem)),
+      );
+
+  /// `0.3`, under the `PopScope` that makes the close control and the system
+  /// gesture do one thing: back to the welcome.
+  ///
+  /// Without it they would differ — one returning, one quitting the app. Held
+  /// by `test/features/onboarding/onboarding_flow_test.dart`'s *"a system back
+  /// does the same thing as the close control"*.
+  Widget _teachingItem() => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, Object? result) {
+          if (!didPop) {
+            _to(OnboardingStep.welcome);
+          }
+        },
+        child: FirstItemScreen(
+          onFinished: _afterTeachingItem,
+          onBack: () => _to(OnboardingStep.welcome),
+        ),
+      );
+
+  Widget _calibrationIntro() => AppShell(
+        child: CalibrationIntroScreen(
+          onStart: () => _to(OnboardingStep.probe),
+          onSkip: () => _to(OnboardingStep.saveProgress),
+        ),
+      );
+
+  /// `0.5`, bare like the teaching item: it brings its own `Scaffold`.
+  Widget _probeItem() => CalibrationItemScreen(
+        items: _probe,
+        onFinished: _afterProbe,
+        onGraded: _recordAnswer,
+      );
+
+  Widget _calibrationResult() => AppShell(
+        child: CalibrationResultScreen(
+          outcome: _outcome,
+          onEnter: () => _to(OnboardingStep.saveProgress),
+        ),
+      );
+
+  /// `0.7`, over the two figures the run can honestly hand it.
+  ///
+  /// **Challenges are the teaching item plus every probe item answered.** Both
+  /// were graded on the device, so both are challenges this player did.
+  ///
+  /// **Days are zero, always, so the day tile is absent.** Neither the teaching
+  /// item nor the probe passes a `DayLogStore`, so the home behind this screen
+  /// will read no days practised, and a tile saying `1 DÍA` would be
+  /// contradicted one tap later. `FirstItemScreen` records why that direction
+  /// matters.
+  Widget _saveProgress() => AppShell(
+        child: SaveProgressScreen(
+          challenges: 1 + _outcome.answered,
+          days: 0,
+          onCreateAccount: widget.onCreateAccount,
+          onLater: widget.onComplete,
+        ),
+      );
 }

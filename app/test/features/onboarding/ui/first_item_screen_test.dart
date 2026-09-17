@@ -1,3 +1,23 @@
+/// `0.3 Primer reto`, and the three exits that had to stop meaning the same
+/// thing.
+///
+/// **The skip control.** *"Saltar este reto"* routed to `RoundScreen._next`,
+/// which on the last item calls `onFinished` — so one tap completed the first
+/// run permanently, with no item ever solved, one row below a close control
+/// that deliberately does not. Two exits, opposite meanings, identical look.
+///
+/// **The retry control, which was worse.** A wrong verdict's continue button is
+/// labelled *"Intentar otro"* — a request for another go — and it routed to
+/// that same `_next`. So the player who answered *wrong*, the one who most
+/// needs the screen that teaches the answer format, was the one who
+/// permanently lost it by tapping the button the app offered them. There is no
+/// reset path: no settings screen, and nothing else reads the flag.
+///
+/// Both are held by cases below, and both are held by their **consequence**
+/// rather than by the absence of a widget: a control renamed tomorrow still
+/// must not finish the teaching item.
+library;
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -24,6 +44,15 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 /// about behaviour rather than a fact about the constructor's parameter list.
 late List<String> assetsRequested;
 
+/// Starts recording into [assetsRequested], and answers every load *not found*.
+///
+/// Answering not-found is what makes a screen that reads a pack fail visibly
+/// rather than quietly succeed against a fixture no test here wrote.
+///
+/// **The instrument is proved before its silence is trusted** (PROC-11): "no
+/// pack was requested" is also true of a harness that observes nothing, so
+/// *"the recorder would have seen a pack read"* pumps `HomeRoute`, which does
+/// read the pack through the same `rootBundle`.
 void _recordAssetLoads() {
   assetsRequested = <String>[];
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -31,8 +60,6 @@ void _recordAssetLoads() {
     if (message != null) {
       assetsRequested.add(utf8.decode(message.buffer.asUint8List()));
     }
-    // Not found. A screen that reads a pack fails visibly rather than quietly
-    // succeeding against a fixture this test never wrote.
     return null;
   });
   addTearDown(() {
@@ -93,20 +120,17 @@ void main() {
     _recordAssetLoads();
   });
 
-  group('the teaching item measures nothing', () {
-    testWidgets('the prompt is the fixed teaching item',
-        (WidgetTester tester) async {
+  group('the teaching item records nothing and reports nothing', () {
+    testWidgets('the prompt is the fixed teaching item, whose answer is typed '
+        'rather than shown', (WidgetTester tester) async {
       await _pump(tester);
 
       expect(_promptGlyphs(tester), <String>['5', '+', '8', '=']);
-      // The answer is typed, never shown.
       expect(_promptGlyphs(tester), isNot(contains('13')));
     });
 
-    testWidgets('13 is what it grades as right', (WidgetTester tester) async {
-      // The other half of "it is the teaching item": the expected answer. A
-      // screen showing `5 + 8` and grading against something else would satisfy
-      // the assertion above.
+    testWidgets('and 13 is what it grades as right, which the prompt alone '
+        'does not pin', (WidgetTester tester) async {
       await _pump(tester);
       for (final String id in <String>['1', '3', 'submit']) {
         await _press(tester, id);
@@ -135,10 +159,6 @@ void main() {
 
     testWidgets('the recorder would have seen a pack read',
         (WidgetTester tester) async {
-      // **The control for the test above.** "No pack was requested" is also true
-      // of a harness that observes nothing, which is no test at all (PROC-11).
-      // `HomeRoute` does read the pack, through the same `rootBundle`, so this
-      // proves the instrument works before the other test trusts its silence.
       await tester.pumpWidget(const MaterialApp(home: HomeRoute()));
       await tester.pumpAndSettle();
 
@@ -150,16 +170,12 @@ void main() {
 
     testWidgets('answering it records no day, so no streak starts here',
         (WidgetTester tester) async {
-      // D4. The screen passes no `DayLogStore`, and this is the observable
-      // consequence: submitting writes nothing at all. Wire a store into it and
-      // the day-log key appears.
       await _pump(tester);
       for (final String id in <String>['1', '3', 'submit']) {
         await _press(tester, id);
       }
       await tester.pumpAndSettle();
 
-      // `isEmpty` subsumes "no day-log key"; asserting both said it twice.
       expect(
         await SharedPreferencesAsync().getKeys(),
         isEmpty,
@@ -169,11 +185,6 @@ void main() {
 
     testWidgets('its verdict shows no streak either',
         (WidgetTester tester) async {
-      // **The number, not just the storage.** `RoundScreen` used to append
-      // `finishedAt` to the streak unconditionally, so the tutorial's verdict
-      // read `RACHA 1` while the home behind it read `0` — the same two-screens
-      // one-morning contradiction `StreakPolicy` was fixed for, in the other
-      // direction, and on a first-run player's very first result.
       await _pump(tester);
       for (final String id in <String>['1', '3', 'submit']) {
         await _press(tester, id);
@@ -208,10 +219,8 @@ void main() {
       expect(find.byType(SpeechBubble), findsNothing);
     });
 
-    testWidgets('she returns on the verdict, which is not a solve',
-        (WidgetTester tester) async {
-      // The rule is about solving, not about the screen — asserting only her
-      // absence would be satisfied by removing her from the app.
+    testWidgets('she returns on the verdict, so the rule is not satisfied by '
+        'deleting her', (WidgetTester tester) async {
       await _pump(tester);
       for (final String id in <String>['1', '3', 'submit']) {
         await _press(tester, id);
@@ -242,8 +251,6 @@ void main() {
 
     testWidgets('the close control leaves without finishing',
         (WidgetTester tester) async {
-      // A mistaken tap on close must not set the flag: skipping the only screen
-      // that teaches the answer format should cost seconds, not the tutorial.
       int finished = 0;
       int back = 0;
       await _pump(tester, onFinished: () => finished++, onBack: () => back++);
@@ -255,10 +262,8 @@ void main() {
       expect(finished, 0, reason: 'leaving completed the first run');
     });
 
-    testWidgets('a single item never offers a second one',
-        (WidgetTester tester) async {
-      // Without `onFinished`, `RoundScreen` cycles — which is right for a
-      // practice series and wrong here. This is that difference, asserted.
+    testWidgets('a single item reports and stops, never composing a second '
+        'one', (WidgetTester tester) async {
       int finished = 0;
       await _pump(tester, onFinished: () => finished++);
 
@@ -270,22 +275,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(finished, 1);
-      // It reports and stops. The screen stays on the verdict it just showed —
-      // no second item is composed, no keypad comes back, and the flow is what
-      // moves on from here. Cycling would put `Reto 1` back on screen with an
-      // empty draft, which is the defect this asserts against.
       expect(find.byType(VerdictRing), findsOneWidget);
       expect(find.byType(Keypad), findsNothing);
     });
 
     testWidgets('asking for another go is not finishing either',
         (WidgetTester tester) async {
-      // **The worst of the three exits.** A wrong verdict's continue button is
-      // labelled *"Intentar otro"* — a request for another go — and it routed to
-      // the same `_next` as *"Siguiente"*. So the child who answered *wrong*, the
-      // one who most needs the screen that teaches the answer format, is the one
-      // who permanently lost it by tapping the button the app offered them. There
-      // is no reset path: no settings screen, and nothing else reads the flag.
       int finished = 0;
       await _pump(tester, onFinished: () => finished++);
 
@@ -299,13 +294,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(finished, 0, reason: 'a wrong answer completed the first run');
-      // Another go means the item back, with an empty slot.
       expect(find.byType(Keypad), findsOneWidget);
       expect(_promptGlyphs(tester), <String>['5', '+', '8', '=']);
     });
 
-    testWidgets('and then solving it does finish', (WidgetTester tester) async {
-      // The control: retrying must not have made the run unfinishable.
+    testWidgets('and then solving it does finish, so retrying did not wedge '
+        'the run', (WidgetTester tester) async {
       int finished = 0;
       await _pump(tester, onFinished: () => finished++);
 
@@ -328,11 +322,6 @@ void main() {
 
     testWidgets('there is nothing to skip, so no skip control is offered',
         (WidgetTester tester) async {
-      // **This was a live defect.** "Saltar este reto" routes to `_next`, which
-      // on the last item calls `onFinished` — so one tap completed the first run
-      // permanently, with no item ever solved, one row below a close control
-      // that deliberately does not. The two exits meant opposite things and
-      // looked the same.
       int finished = 0;
       await _pump(tester, onFinished: () => finished++);
 

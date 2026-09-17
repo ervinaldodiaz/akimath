@@ -1,3 +1,19 @@
+/// The whole first run, `0.2 → 0.3 → 0.4 → 0.5 ×n → 0.6 → 0.7`, through the
+/// gate that decides whether it is shown at all.
+///
+/// **D11 is superseded, and this file used to assert its opposite.** F2 shipped
+/// `0.2` and `0.3` alone precisely because `0.4` promises *"unos rápidos para
+/// acomodar tu nivel"* and nothing in the build adapted to a level. The four
+/// screens were then asked for explicitly, for a demo, with the missing
+/// placement named out loud. What survives of D11 is the honest half: the
+/// promise may be made on `0.4`, and `0.6` must still claim no level, no rank
+/// and no placement, because there is no rating system to produce one.
+///
+/// **No field on the path asks for an email or a password.** The app's own
+/// keypad is the only input, and `EditableText` is what a text field renders,
+/// so its absence is the assertion rather than a search for a label.
+library;
+
 import 'dart:convert';
 
 import 'package:akimath_app/content/pack_reader.dart';
@@ -98,6 +114,11 @@ Future<void> _press(WidgetTester tester, String id) async {
 }
 
 /// Welcome → teaching item → answered → acknowledged, which lands on `0.4`.
+///
+/// **It answers the teaching item *correctly*, and that is load-bearing.** A
+/// case that then answers a probe item **wrong** can tell a leaked tutorial
+/// answer from a probe answer: the device's record would read
+/// `[correct, wrong]` rather than `[wrong]`.
 Future<void> _walkTeachingItem(WidgetTester tester) async {
   await tester.tap(find.text('Resolver uno'));
   await tester.pumpAndSettle();
@@ -132,7 +153,28 @@ Future<void> _walkFirstRun(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Presses the system back gesture, and reports whether anything handled it.
+///
+/// **`maybePop` reports whether the *request* was handled, not whether a route
+/// came off the stack.** `doNotPop` counts as handled, and it is what keeps a
+/// first-run player inside the app instead of quitting it. Unhandled, the
+/// request bubbles to the platform and the app closes, which is what back at a
+/// root should do — so the two answers are a difference rather than a constant,
+/// and both are asserted below.
+Future<bool> _systemBack(WidgetTester tester) async {
+  final NavigatorState navigator = tester.state(find.byType(Navigator));
+  final bool handled = await navigator.maybePop();
+  await tester.pumpAndSettle();
+  return handled;
+}
+
 /// Every string the current screen renders, lowercased.
+///
+/// **It is proved to see real copy before any negative is believed** (PROC-11):
+/// a list of words no Spanish copy would ever hold makes every
+/// `isNot(contains(...))` below pass for ever, so *"the words it looks for are
+/// words a screen could contain"* reads two strings that are on `0.2` and
+/// asserts they are found.
 String _copy(WidgetTester tester) => tester
     .widgetList<Text>(find.byType(Text))
     .map((Text t) => (t.data ?? '').toLowerCase())
@@ -194,22 +236,12 @@ void main() {
       await tester.tap(find.text('Resolver uno'));
       await tester.pumpAndSettle();
 
-      // The app's own keypad is the only input on the path. `EditableText` is
-      // what a text field renders, so its absence is the assertion.
       expect(find.byType(EditableText), findsNothing);
       expect(_copy(tester), isNot(contains('correo')));
     });
 
     testWidgets('the probe promises to adapt, and the result claims nothing',
         (WidgetTester tester) async {
-      // **This test used to assert the opposite, and D11 is why.** F2 shipped
-      // `0.2` and `0.3` alone precisely because `0.4` promises *"unos rápidos
-      // para acomodar tu nivel"* and nothing in the build adapts to a level.
-      // The four screens were then asked for explicitly, for a demo, with the
-      // missing placement named out loud — so D11 is superseded and the honest
-      // half of it moves here: the promise may be made on `0.4`, and `0.6` must
-      // still claim no level, no rank and no placement, because there is no
-      // rating system to produce one.
       const List<String> claims = <String>['nivel', 'rango', 'puesto'];
 
       await _pump(tester);
@@ -231,9 +263,6 @@ void main() {
 
     testWidgets('the words it looks for are words a screen could contain',
         (WidgetTester tester) async {
-      // PROC-11's control. A list of words no Spanish copy would ever hold makes
-      // the test above pass forever. `_copy` is proven to see real copy, so the
-      // negatives above are negatives about the copy and not about the reader.
       await _pump(tester);
       expect(_copy(tester), contains('resolvemos'));
       expect(_copy(tester), contains('aki'));
@@ -243,8 +272,6 @@ void main() {
   group('the probe sits between the teaching item and the home', () {
     testWidgets('skipping it at 0.4 steps over the result entirely',
         (WidgetTester tester) async {
-      // Nothing was answered, so there is nothing true to put on `0.6` — the
-      // same reading as the profile drawing no `HISTORIAL` section.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -312,10 +339,6 @@ void main() {
 
     testWidgets('0.7 reports no day, because the first run records none',
         (WidgetTester tester) async {
-      // The `RACHA 1` defect, in its other direction: the teaching item and the
-      // probe both pass no `DayLogStore`, so the home behind this screen will
-      // read zero days. A tile saying `1 DÍA` would be contradicted one tap
-      // later, so there is no tile.
       await _pump(tester);
       await _walkTeachingItem(tester);
       await tester.tap(find.text('Saltar por ahora'));
@@ -331,12 +354,6 @@ void main() {
 
     testWidgets('the home does not re-serve what the probe already asked',
         (WidgetTester tester) async {
-      // **The `7 + 6` defect, ten times over.** The probe takes the pack's
-      // first ten items; the home previews `pack.items.first` as RETO DEL DÍA
-      // and opens its first series at `seriesPlan(pack.items, from: 0)`. Left
-      // alone, a player who finished calibration would meet every one of those
-      // ten again on the next screen. The probe therefore advances the same
-      // cursor a finished series advances.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -352,9 +369,6 @@ void main() {
 
     testWidgets('and a probe nobody answered advances it by nothing',
         (WidgetTester tester) async {
-      // The control. The cursor counts items *served*, and skipping serves
-      // none — advancing on the skip would silently cost the player the first
-      // ten items of their pack.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -366,18 +380,6 @@ void main() {
 
     testWidgets('the probe reaches the accuracy figures and the tutorial does '
         'not', (WidgetTester tester) async {
-      // **The other half of the cursor above.** The probe already advances the
-      // count `4.1` prints as `RETOS`, and `0.7` says why in as many words —
-      // *"Both were graded on the device, so both are challenges this player
-      // did"*. Two of the three device figures were wired and one was not, so a
-      // player who answered ten probe items read `10 RETOS` beside no
-      // `ACIERTOS` tile at all — and `LocalStats.accuracy` documents null as
-      // *"the player has answered nothing"*, which was false for them.
-      //
-      // The teaching item stays out, and this is the case that can tell the two
-      // apart: `_walkTeachingItem` answers `7 + 6` **correctly** and the probe
-      // item is answered **wrong**, so a record that leaked the tutorial would
-      // read `[correct, wrong]` rather than `[wrong]`.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -397,11 +399,9 @@ void main() {
       expect(LocalStats.of(record).accuracyPercent, 0);
     });
 
-    testWidgets('a probe nobody answered leaves the figures with no source',
+    testWidgets('a probe nobody answered leaves accuracy with no source, '
+        'rather than a 0 % that reads as already failing',
         (WidgetTester tester) async {
-      // The control, and the reason `accuracy` is nullable: a player who
-      // skipped the probe has answered nothing that counts, and `0 %` would
-      // tell them they are already failing.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -427,9 +427,6 @@ void main() {
 
     testWidgets('and one that has it records the run before handing over',
         (WidgetTester tester) async {
-      // **The flag is the gate's, and the gate sets it either way.** A player
-      // who leaves for the account flow has seen the whole first run; showing
-      // it again after they come back would be the app forgetting.
       int asked = 0;
       await _pump(tester, onCreateAccount: () => asked++);
       await _walkTeachingItem(tester);
@@ -456,10 +453,6 @@ void main() {
     });
 
     testWidgets('and nothing before 0.7 records it', (WidgetTester tester) async {
-      // **The whole run is the first run now.** It used to end at the solved
-      // teaching item; four screens sit after it, and the last of them is the
-      // only invitation to keep any of it. A flag set at 0.3 would hide them
-      // from a player who closed the app on 0.5.
       await _pump(tester);
       await _walkTeachingItem(tester);
 
@@ -472,7 +465,6 @@ void main() {
 
     testWidgets('the second launch goes straight to the home',
         (WidgetTester tester) async {
-      // Two mounts over one storage is what two launches look like from here.
       await _pump(tester);
       await _walkFirstRun(tester);
 
@@ -482,11 +474,9 @@ void main() {
       expect(find.byType(WelcomeScreen), findsNothing);
     });
 
-    testWidgets('a launch that has not completed it shows the welcome again',
+    testWidgets('and a launch that has not completed it still shows the '
+        'welcome, so "straight to the home" is not a constant',
         (WidgetTester tester) async {
-      // The control for the test above: relaunching *without* finishing must
-      // still open on the welcome, or "straight to the home" would be true of a
-      // gate that never shows the onboarding at all.
       await _pump(tester);
       await tester.tap(find.text('Resolver uno'));
       await tester.pumpAndSettle();
@@ -499,8 +489,6 @@ void main() {
 
     testWidgets('storage that cannot be read shows the welcome',
         (WidgetTester tester) async {
-      // A `bool` key holding a `String` throws a `TypeError` on read. The gate
-      // must open on the welcome rather than fail the launch.
       await SharedPreferencesAsync()
           .setString(OnboardingStore.key, 'not a flag');
 
@@ -531,22 +519,13 @@ void main() {
 
     testWidgets('a system back does the same thing as the close control',
         (WidgetTester tester) async {
-      // **The `PopScope` claim, asserted.** The teaching item is swapped in
-      // rather than pushed, so without it a system back at the root would quit
-      // the app while the visible close returned to the welcome — two controls,
-      // two meanings. The doc comment said they agree; this is what checks it.
       await _pump(tester);
       await tester.tap(find.text('Resolver uno'));
       await tester.pumpAndSettle();
       expect(find.byType(FirstItemScreen), findsOneWidget);
 
-      final NavigatorState navigator = tester.state(find.byType(Navigator));
-      final bool handled = await navigator.maybePop();
-      await tester.pumpAndSettle();
+      final bool handled = await _systemBack(tester);
 
-      // `maybePop` reports whether the *request* was handled, not whether a
-      // route came off the stack: `doNotPop` is handled, and it is what keeps a
-      // first-run player inside the app instead of quitting it.
       expect(handled, isTrue, reason: 'the back request went unhandled');
       expect(find.byType(WelcomeScreen), findsOneWidget);
       expect(
@@ -558,10 +537,6 @@ void main() {
 
     testWidgets('there is no skip control to complete the run with',
         (WidgetTester tester) async {
-      // The flag-level half of the same defect: a tap on "Saltar este reto"
-      // reached `onComplete` and wrote the flag. The control is gone, and this
-      // asserts the consequence rather than its absence — a control renamed
-      // tomorrow still must not complete a first run.
       await _pump(tester);
       await tester.tap(find.text('Resolver uno'));
       await tester.pumpAndSettle();
@@ -573,20 +548,12 @@ void main() {
       );
     });
 
-    testWidgets('a system back on the welcome is not intercepted',
-        (WidgetTester tester) async {
-      // The control. `PopScope` applies only while solving — holding it on the
-      // welcome would make a first-run player unable to leave the app at all,
-      // which is the opposite failure.
+    testWidgets('a system back on the welcome is not intercepted, because '
+        'PopScope applies only while solving', (WidgetTester tester) async {
       await _pump(tester);
 
-      final NavigatorState navigator = tester.state(find.byType(Navigator));
-      final bool handled = await navigator.maybePop();
-      await tester.pumpAndSettle();
+      final bool handled = await _systemBack(tester);
 
-      // Unhandled, so it bubbles to the platform and the app closes — which is
-      // what back at a root should do. This is also what makes the test above
-      // mean something: `true` there is a difference, not a constant.
       expect(handled, isFalse, reason: 'the welcome intercepted a system back');
       expect(find.byType(WelcomeScreen), findsOneWidget);
     });

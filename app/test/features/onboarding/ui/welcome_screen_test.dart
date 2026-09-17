@@ -41,8 +41,6 @@ void main() {
   group('no account is asked for', () {
     testWidgets('there is no text field of any kind',
         (WidgetTester tester) async {
-      // The first run reaches a solved item with no registration and no network
-      // call. That is the requirement, not an omission.
       await _pump(tester);
 
       expect(find.byType(EditableText), findsNothing);
@@ -70,12 +68,9 @@ void main() {
     });
   });
 
-  group('the copy does not promise what F2 cannot keep', () {
+  group('the promise to adapt belongs to 0.4, not to the greeting', () {
     testWidgets('it does not mention levels or calibration',
         (WidgetTester tester) async {
-      // D11: F2 ships 0.2 and 0.3 only. `0.4`'s promise — "unos rápidos para
-      // acomodar tu nivel" — is one this build cannot keep, so this screen must
-      // not make it either.
       await _pump(tester);
 
       final String copy = tester
@@ -84,7 +79,11 @@ void main() {
           .join(' ');
 
       for (final String word in <String>['nivel', 'acomodar', 'calibra']) {
-        expect(copy, isNot(contains(word)), reason: '"$word" promises F4');
+        expect(
+          copy,
+          isNot(contains(word)),
+          reason: '"$word" is 0.4\'s promise, made two screens early on 0.2',
+        );
       }
     });
   });

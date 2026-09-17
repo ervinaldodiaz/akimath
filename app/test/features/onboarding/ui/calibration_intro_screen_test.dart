@@ -41,8 +41,6 @@ void main() {
 
   testWidgets('it promises both of the things the design promises',
       (WidgetTester tester) async {
-    // The two pills are the promise the rest of the flow has to keep: nothing
-    // is graded, and the probe can be left.
     await _pump(tester);
 
     expect(find.text('No se califica'), findsOneWidget);
@@ -50,8 +48,6 @@ void main() {
   });
 
   testWidgets('it never uses the word "prueba"', (WidgetTester tester) async {
-    // The design labels this screen *nunca "prueba"*. A probe a player reads
-    // as a test is a different product.
     await _pump(tester);
 
     final Iterable<String> copy = tester

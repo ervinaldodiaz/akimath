@@ -84,8 +84,9 @@ class _FirstRunGateState extends State<FirstRunGate> {
     _load();
   }
 
+  /// Reads the flag and waits out the splash floor **at once**, so the two
+  /// overlap rather than add up.
   Future<void> _load() async {
-    // Both at once, so the floor and the read overlap rather than add up.
     final List<Object?> both = await Future.wait(<Future<Object?>>[
       widget.store.isComplete(),
       Future<void>.delayed(widget.splashFloor),
@@ -112,10 +113,6 @@ class _FirstRunGateState extends State<FirstRunGate> {
   Widget build(BuildContext context) {
     final bool? complete = _complete;
     if (complete == null) {
-      // **The splash, which until now was built and reachable from nowhere.**
-      // This is the frame the gate was already honest about — it knows only
-      // that it does not yet know — and an empty cream rectangle was the
-      // placeholder standing in for a treatment that existed the whole time.
       return const SplashScreen(variant: SplashVariant.brandGreen);
     }
     final VoidCallback? create = widget.onCreateAccount;
@@ -128,14 +125,12 @@ class _FirstRunGateState extends State<FirstRunGate> {
             seriesCursor: widget.seriesCursor,
             onCreateAccount: create == null
                 ? null
-                : () {
-                    // Recorded first, for the same reason `_finishFirstRun`
-                    // records before showing the home: the run is over either
-                    // way, and showing it again after an account is made would
-                    // be the app forgetting.
-                    unawaited(widget.store.markComplete());
-                    create();
-                  },
+                : () => _recordRunThenCreateAccount(create),
           );
+  }
+
+  void _recordRunThenCreateAccount(VoidCallback create) {
+    unawaited(widget.store.markComplete());
+    create();
   }
 }

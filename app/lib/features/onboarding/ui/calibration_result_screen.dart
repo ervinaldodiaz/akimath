@@ -61,68 +61,72 @@ class CalibrationResultScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // **The readable half scrolls; the button does not.** This screen
-          // stacks a drawing, a display line, three cards and a paragraph, and
-          // it cleared the 390×844 overflow gate at `textScaler` 1.3 by about
-          // four percent — measured: it overflowed at 1.35 on macOS and at 1.30
-          // on CI's Ubuntu, whose glyph advances are wider. A layout that fits
-          // by a pixel on one toolchain does not fit on another, and the runner
-          // is the authority. Scrolling removes the ceiling instead of moving
-          // it: nothing scrolls while it fits, and there is no arrangement of
-          // fonts or text sizes that can overflow it.
-          //
-          // Keeping the button *outside* the scroll view is the other half.
-          // An overflowing `Column` squeezes its children, which is how a 62px
-          // control measures under 48 on the rendered screen and takes the
-          // touch-target gate with it.
-          Expanded(
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints box) =>
-                  SingleChildScrollView(
-                child: ConstrainedBox(
-                  // Centred while it fits, scrolled once it does not — rather
-                  // than pinned to the top with a gap under it at 1.0.
-                  constraints: BoxConstraints(minHeight: box.maxHeight),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Center(
-                        child: Aki(
-                          width: _akiWidth,
-                          pose: AkiPose.correct,
-                          semanticLabel: 'Aki',
-                        ),
-                      ),
-                      const SizedBox(height: BrandShape.space4),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          'AQUÍ EMPIEZAS',
-                          style: BrandText.sectionTitle(size: 44),
-                        ),
-                      ),
-                      const SizedBox(height: BrandShape.space4),
-                      _measured(),
-                      const SizedBox(height: BrandShape.space4),
-                      Text(
-                        'No es calificación. Es de dónde salimos, y se mueve '
-                        'todos los días.',
-                        textAlign: TextAlign.center,
-                        style: BrandText.body(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _scrollingReadableHalf(),
           const SizedBox(height: BrandShape.space4),
           BrandButton.primary(label: 'Entrar a mi mapa', onPressed: onEnter),
         ],
       ),
     );
   }
+
+  /// Everything above the button, which scrolls while the button does not.
+  ///
+  /// This screen stacks a drawing, a display line, the cards and a paragraph,
+  /// and it cleared the 390×844 overflow gate at `textScaler` 1.3 by about four
+  /// percent — measured: it overflowed at 1.35 on macOS and at 1.30 on CI's
+  /// Ubuntu, whose glyph advances are wider. A layout that fits by a pixel on
+  /// one toolchain does not fit on another, and the runner is the authority.
+  /// Scrolling removes the ceiling instead of moving it: nothing scrolls while
+  /// it fits, and there is no arrangement of fonts or text sizes that can
+  /// overflow it.
+  ///
+  /// Keeping the button **outside** the scroll view is the other half. An
+  /// overflowing `Column` squeezes its children, which is how a 62px control
+  /// measures under 48 on the rendered screen and takes the touch-target gate
+  /// with it.
+  ///
+  /// The `minHeight` is what keeps it centred while it fits and scrolled once
+  /// it does not, rather than pinned to the top with a gap under it at 1.0.
+  Widget _scrollingReadableHalf() => Expanded(
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints box) =>
+              SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: box.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Center(
+                    child: Aki(
+                      width: _akiWidth,
+                      pose: AkiPose.correct,
+                      semanticLabel: 'Aki',
+                    ),
+                  ),
+                  const SizedBox(height: BrandShape.space4),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'AQUÍ EMPIEZAS',
+                      style: BrandText.sectionTitle(size: 44),
+                    ),
+                  ),
+                  const SizedBox(height: BrandShape.space4),
+                  _measured(),
+                  const SizedBox(height: BrandShape.space4),
+                  Text(
+                    'No es calificación. Es de dónde salimos, y se mueve '
+                    'todos los días.',
+                    textAlign: TextAlign.center,
+                    style: BrandText.body(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 
   /// The two figures the probe actually produced.
   ///
@@ -133,37 +137,32 @@ class CalibrationResultScreen extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Expanded(
-              child: StatTile(
-                label: 'ACIERTOS',
-                // **`scaleDown`, because a tile is half a screen wide.**
-                // `10 / 10` and an hour-long `64:09` are the widest figures
-                // these two can hold, and a numeral that does not fit wraps —
-                // which grows the row and overflows the screen rather than the
-                // tile. The same shape that overflowed `4.1`'s tile row.
-                value: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: StatValue(
-                    EsMxNumber.ratio(outcome.correct, outcome.answered),
-                    size: 24,
-                  ),
-                ),
-              ),
+            _figure(
+              label: 'ACIERTOS',
+              value: EsMxNumber.ratio(outcome.correct, outcome.answered),
             ),
             const SizedBox(width: BrandShape.space2),
-            Expanded(
-              child: StatTile(
-                label: 'TIEMPO',
-                value: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: StatValue(
-                    EsMxNumber.elapsed(outcome.elapsed),
-                    size: 24,
-                  ),
-                ),
-              ),
+            _figure(
+              label: 'TIEMPO',
+              value: EsMxNumber.elapsed(outcome.elapsed),
             ),
           ],
+        ),
+      );
+
+  /// One measured figure, in a tile that takes half the row.
+  ///
+  /// **`scaleDown`, because a tile is half a screen wide.** `10 / 10` and an
+  /// hour-long `64:09` are the widest figures these two can hold, and a numeral
+  /// that does not fit wraps — which grows the row and overflows the screen
+  /// rather than the tile. The same shape that overflowed `4.1`'s tile row.
+  Widget _figure({required String label, required String value}) => Expanded(
+        child: StatTile(
+          label: label,
+          value: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: StatValue(value, size: 24),
+          ),
         ),
       );
 }

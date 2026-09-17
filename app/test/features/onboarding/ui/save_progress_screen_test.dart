@@ -51,7 +51,6 @@ void main() {
 
   testWidgets('and they change with the figures handed in',
       (WidgetTester tester) async {
-    // The control: without it the two above pass for a screen of constants.
     await _pump(tester, challenges: 3, days: 12, onCreateAccount: () {});
 
     expect(find.text('3'), findsOneWidget);
@@ -61,9 +60,6 @@ void main() {
 
   testWidgets('the design\'s middle tile is absent, because nothing fills it',
       (WidgetTester tester) async {
-    // `0.7` draws `RATING 1 248` between the two measured tiles. Rating never
-    // runs in Dart and `GET /me/standing` answers one per skill, so it was an
-    // invented constant until 2026-09-02 and it is now simply not drawn.
     await _pump(tester, onCreateAccount: () {});
 
     expect(find.textContaining('RATING'), findsNothing);
@@ -71,12 +67,6 @@ void main() {
 
   testWidgets('the row shrinks to the figures there are, down to one',
       (WidgetTester tester) async {
-    // **The shape that ships.** `OnboardingFlow` always passes `days: 0` —
-    // neither the teaching item nor the probe records a day — so this is what
-    // a first-time player sees, and it was a two-tile row only because the
-    // second tile was invented. One tile is as legitimate as three, the same
-    // reading `4.1`'s tile row already makes; a `0 DÍAS` beside it would be
-    // the `RACHA 1` defect in its other direction.
     await _pump(tester, challenges: 11, days: 0, onCreateAccount: () {});
 
     expect(find.text('RETOS'), findsOneWidget);
@@ -136,10 +126,6 @@ void main() {
 
   testWidgets('no days practised is no tile, not a tile reading zero',
       (WidgetTester tester) async {
-    // The `RACHA 1` defect in its other direction: the figure shown must be
-    // the figure the store will yield, and nothing in the first run records a
-    // day. `0 DÍAS` on a screen inviting you to keep your progress is worse
-    // than the absence.
     await _pump(tester, days: 0, onCreateAccount: () {});
 
     expect(find.text('DÍA'), findsNothing);
@@ -149,9 +135,6 @@ void main() {
 
   testWidgets('with no account flow wired, it offers nothing it cannot do',
       (WidgetTester tester) async {
-    // DR-P2, the same reading as the profile drawing no account row in a build
-    // that has no auth URL: a button that goes nowhere is worse than no
-    // button. The way on is still there.
     await _pump(tester);
 
     expect(find.text('Crear cuenta'), findsNothing);

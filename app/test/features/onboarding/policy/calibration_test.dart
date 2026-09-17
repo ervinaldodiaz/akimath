@@ -1,3 +1,18 @@
+/// The probe's pure policy, and the one gate that reads the shipped pack.
+///
+/// **The `7 + 6` defect, guarded at the probe's end.** The probe takes the
+/// pack's first ten, which is exactly where a teaching item edited back into
+/// the pack would resurface. `ui/teaching_item_test.dart` holds the incident
+/// itself and guards the home's end of the same rule.
+///
+/// Two of the cases here are PROC-11 controls rather than claims of their own.
+/// *"the reader it uses can see a repeat"* is what stops the collision
+/// assertion passing for a `_prompt` that returns the empty string for
+/// everything, and *"they are not all the same"* is what `0.5` annotates the
+/// strip with in as many words — *"las alturas cambian: no es una serie, es una
+/// sonda"* — because a flat bar would read as a five-item series.
+library;
+
 import 'package:akimath_app/content/model/item.dart';
 import 'package:akimath_app/content/model/pack.dart';
 import 'package:akimath_app/content/pack_reader.dart';
@@ -44,13 +59,6 @@ String _prompt(Stimulus stimulus) => switch (stimulus) {
 void main() {
   group('the probe never asks the item the tutorial already asked', () {
     test('the shipped pack does not hold the teaching item', () async {
-      // **The `7 + 6` defect, guarded at the other end.**
-      // `FirstItemScreen.teachingItem` is `5 + 8` precisely because the pack's
-      // first item *was* the tutorial's, so a new player solved it and met it
-      // twice more one screen later. The probe takes the pack's first ten,
-      // which is exactly where that would resurface the day somebody edits the
-      // constant back — and no other test would see it, because every other
-      // one hands this screen its item.
       TestWidgetsFlutterBinding.ensureInitialized();
       final Pack pack = await const PackReader().load();
       final List<Item> plan = calibrationPlan(pack.items);
@@ -63,8 +71,6 @@ void main() {
     });
 
     test('and the reader it uses can see a repeat when there is one', () async {
-      // PROC-11's control: without it, the assertion above passes for a
-      // `_prompt` that returns the empty string for everything.
       TestWidgetsFlutterBinding.ensureInitialized();
       final Pack pack = await const PackReader().load();
       final List<Item> plan = calibrationPlan(pack.items);
@@ -119,14 +125,10 @@ void main() {
     });
 
     test('and they are not all the same, which is the whole point', () {
-      // `0.5` annotates the strip *"las alturas cambian: no es una serie, es
-      // una sonda"*. A flat bar would read as a five-item series.
       expect(probeBarHeights(10).toSet().length, greaterThan(1));
     });
 
     test('a bar longer than the pattern keeps varying', () {
-      // Nothing asks for more than ten today. A pattern that ran out would
-      // return a short list and the strip would silently lose its last bars.
       expect(probeBarHeights(12), hasLength(12));
       expect(probeBarHeights(12).last, probeBarHeights(2).last);
     });
@@ -170,9 +172,8 @@ void main() {
       expect(outcome.elapsed, const Duration(minutes: 2, seconds: 14));
     });
 
-    test('two outcomes with the same figures are the same outcome', () {
-      // A value type, so a widget test can assert on one without reaching
-      // into its fields.
+    test('two outcomes with the same figures are equal, so a widget test can '
+        'assert on one', () {
       const CalibrationOutcome one = CalibrationOutcome(
         asked: 10,
         answered: 6,

@@ -31,27 +31,31 @@ class OnboardingStore {
   ///
   /// Failures are reported rather than swallowed: a tolerant adapter must still
   /// be a loud one, which is the lesson a silent day-log store already cost.
+  ///
+  /// **The `catch` is deliberately broad.** A key holding the wrong type throws
+  /// a `TypeError`, which is an `Error` and not an `Exception` — so
+  /// `on Exception` misses it and a launch dies on a corrupt preference. The
+  /// rule is that *nothing* about the stored value may prevent a launch, and
+  /// that is wider than the exception hierarchy.
   Future<bool> isComplete() async {
     try {
       return await _prefs.getBool(key) ?? false;
     } catch (error) {
-      // **Deliberately broad.** A key holding the wrong type throws a
-      // `TypeError`, which is an `Error` and not an `Exception` — so
-      // `on Exception` misses it and a launch dies on a corrupt preference. The
-      // rule here is that *nothing* about the stored value may prevent a
-      // launch, and that is wider than the exception hierarchy.
       debugPrint('onboarding: could not read ($error)');
       return false;
     }
   }
 
+  /// Records that the onboarding has been completed.
+  ///
+  /// **A write that fails costs a repeat, never a launch.** The onboarding is
+  /// shown again next launch — mildly annoying, and strictly better than a
+  /// launch that dies. The `catch` is broad for the same reason [isComplete]'s
+  /// is.
   Future<void> markComplete() async {
     try {
       await _prefs.setBool(key, true);
     } catch (error) {
-      // The onboarding will be shown again next launch. Mildly annoying, and
-      // strictly better than a launch that fails. Broad for the same reason as
-      // the read.
       debugPrint('onboarding: could not write ($error)');
     }
   }
