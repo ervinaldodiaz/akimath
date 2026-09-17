@@ -98,9 +98,12 @@ one author produces one-sided reports:
 - Complexity shows up as **change amplification** (one decision, many edits), **cognitive load**
   (how much you must know to change one line) and **unknown unknowns** (you cannot tell what else
   you must change). These three are the best cost vocabulary you have — prefer them to adjectives.
-- **Comments are not failures.** Martin's *"every comment is a failure"* is explicitly rejected by
-  Ousterhout, and this project sides with Ousterhout: its comments carry rationale a name cannot,
-  and CMT-2 makes a *false* comment the defect. Never report the existence of a comment.
+- **The project splits Martin and Ousterhout by where the comment sits, as of 2026-09-16.** Inside
+  a function body it sides with Martin and CMT-1 now forbids one outright; on the symbol it sides
+  with Ousterhout, because a doc comment carries rationale a name cannot and CMT-2 makes a *false*
+  one the defect. So: **never report the existence of a doc comment**, and report a body comment
+  only as what it is evidence of — a function doing two things, one of which has no name. The
+  finding is the missing extraction, never the sentence.
 
 ### Others, and how to use them
 
@@ -153,7 +156,7 @@ Every finding, without exception:
 
 - Line counts, nesting depth, parameter counts — `dart_code_linter` owns those.
 - An exhaustive switch over a sealed type.
-- The existence of a comment.
+- The existence of a doc comment.
 - Duplication whose copies do not change together.
 - Anything the project decided on purpose in CLAUDE.md — that is an Observation at most.
 - Taste. If you cannot state a cost, you do not have a finding.

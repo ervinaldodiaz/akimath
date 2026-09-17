@@ -126,7 +126,11 @@ For every candidate finding:
     the one blessed literal outside it (`app/lib/design/theme.dart:37,42,48,53`); CLAUDE.md names
     that carve-out explicitly, so citing BRD-2b against it is a false positive.
   - **A doc comment that carries a brand invariant** ("coral means error and nothing else") is not a
-    redundant comment; it is the rationale a method name cannot hold.
+    redundant comment; it is the rationale a method name cannot hold. **A comment inside a function
+    body is a CMT-1 violation as of 2026-09-16**, whatever it says — the remedy is an extraction
+    with a name, and where the sentence carried a decision, that decision moves to the symbol or to
+    `docs/` rather than disappearing. Tool directives (`// ignore:`, `// eslint-disable-next-line`)
+    are not comments for this purpose.
   - **Verbosity in a `CustomPainter`'s draw calls** is not automatically a function-size violation
     if the decision it paints already lives in the spec layer — check where the logic is before
     counting lines.
