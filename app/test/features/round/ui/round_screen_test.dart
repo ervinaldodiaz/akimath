@@ -10,6 +10,22 @@ import 'package:akimath_app/features/round/ui/round_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// The keys that spell `42`, which is what both fixtures' first item wants.
+const List<String> _rightAnswer = <String>['4', '2'];
+
+/// Anything the fixtures do not want.
+const String _wrongAnswer = '9';
+
+/// A second wrong answer, so a round answered wrong twice can tell its first
+/// slip from its last.
+const String _anotherWrongAnswer = '7';
+
+/// The four instants a two-item round reads, in the order it reads them.
+final DateTime _itemOneShown = DateTime(2026, 8, 17, 9);
+final DateTime _itemOneSubmitted = DateTime(2026, 8, 17, 9, 0, 3);
+final DateTime _itemTwoShown = DateTime(2026, 8, 17, 9, 0, 30);
+final DateTime _itemTwoSubmitted = DateTime(2026, 8, 17, 9, 0, 32);
+
 const List<Item> _oneItem = <Item>[
   Item(
     id: 't1',
@@ -86,14 +102,10 @@ String _tileFigure(WidgetTester tester, String label) {
 
 void main() {
   group('the time it reports is the time the player took', () {
-    testWidgets('the first item is timed from when it appeared',
+    testWidgets(
+        'the first item is timed from when it appeared and never reports a '
+        'negative duration — the first verdict every player sees',
         (WidgetTester tester) async {
-      // **`late` with an initializer runs on first *read*.** `_startedAt` is not
-      // read while the item is on screen, so its first read was inside `_submit`
-      // — *after* the finish instant had been captured. Every round's first item
-      // therefore reported a negative duration, which is every first verdict a
-      // player ever sees: the tile read `−0,0 s`. Items 2..n were right, because
-      // `_next` assigns the field before the initializer can fire.
       final List<DateTime> instants = <DateTime>[
         DateTime(2026, 8, 17, 9, 0, 0),
         DateTime(2026, 8, 17, 9, 0, 7, 400),
@@ -115,24 +127,26 @@ void main() {
 
       expect(instants, isEmpty, reason: 'the clock was read a different number '
           'of times than this test accounts for');
-      // Built through the formatter rather than typed: the figure carries a thin
-      // no-break space, and a literal here would compare invisibly-unequal.
       final String figure = _tileFigure(tester, 'TIEMPO');
-      expect(figure, EsMxNumber.seconds(7.4, places: 1));
-      // Guards the degenerate case: comparing two calls of the same formatter
-      // would also pass if the formatter returned nothing.
-      expect(figure, isNotEmpty);
+      expect(figure, EsMxNumber.seconds(7.4, places: 1),
+          reason: 'built through the formatter rather than typed, because the '
+              'figure carries a thin no-break space a literal would not');
+      expect(figure, isNotEmpty,
+          reason: 'comparing two calls of one formatter would also pass if it '
+              'returned nothing');
       expect(figure, isNot(startsWith('−')), reason: 'a negative duration');
     });
 
-    testWidgets('the second item is timed from when it appeared, not the first',
+    testWidgets(
+        'the second item is timed from when it appeared and not from the '
+        'first — the control, since every item sharing one start would also '
+        'clear the assertion above',
         (WidgetTester tester) async {
-      // The control: the fix must not make every item share one start.
       final List<DateTime> instants = <DateTime>[
-        DateTime(2026, 8, 17, 9, 0, 0), // item 1 shown
-        DateTime(2026, 8, 17, 9, 0, 3), // item 1 submitted
-        DateTime(2026, 8, 17, 9, 0, 30), // item 2 shown
-        DateTime(2026, 8, 17, 9, 0, 32), // item 2 submitted
+        _itemOneShown,
+        _itemOneSubmitted,
+        _itemTwoShown,
+        _itemTwoSubmitted,
       ];
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -163,12 +177,11 @@ void main() {
   });
 
   group('a series ends when it has an ending, and cycles when it does not', () {
-    testWidgets('onFinished fires on the last item and not before',
+    testWidgets(
+        'onFinished fires on the last item and not before — every other test '
+        'here passes one item, so dropping the last-item guard entirely left '
+        'the whole suite green while a real series ended after item one',
         (WidgetTester tester) async {
-      // **The guard, asserted.** Every other test here passes one item, so
-      // `_index == items.length - 1` was never exercised: rewriting the body as
-      // `if (finished != null)` left the whole suite green while a real series
-      // would have ended after its first item.
       int finished = 0;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -197,14 +210,12 @@ void main() {
       expect(finished, 1);
     });
 
-    testWidgets('a wrong last answer ends a multi-item series, not a one-item one',
+    testWidgets(
+        'a wrong last answer ends a multi-item series but not a one-item one — '
+        'on one item the only "another one" Intentar otro can offer is this '
+        'one, while a series a player keeps failing would otherwise wrap to '
+        'item 1 forever and never finish',
         (WidgetTester tester) async {
-      // **The asymmetry, and it is the whole point of the rule.** On a one-item
-      // round the only "another one" `Intentar otro` can offer is *this* one, so
-      // a wrong verdict must not end it. With more items the button offers a
-      // genuinely different item, and the last item ends the round either way —
-      // otherwise a series a player keeps failing wraps to item 1 forever and
-      // `onFinished` never fires.
       int finished = 0;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -223,8 +234,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Reto 2'), findsOneWidget);
 
-      // Wrong on the last item.
-      for (final String id in <String>['9', 'submit']) {
+      for (final String id in <String>[_wrongAnswer, 'submit']) {
         await _press(tester, id);
       }
       await tester.pumpAndSettle();
@@ -235,10 +245,11 @@ void main() {
       expect(find.text('Reto 1'), findsNothing);
     });
 
-    testWidgets('without onFinished the last item cycles back to the first',
+    testWidgets(
+        'without onFinished the last item cycles back to the first — the '
+        'control, since a practice series is endless and must not have been '
+        'quietly ended',
         (WidgetTester tester) async {
-      // The control: a practice series is endless, and this change must not have
-      // quietly ended it.
       tester.view
         ..physicalSize = const Size(390, 844)
         ..devicePixelRatio = 1;
@@ -261,11 +272,11 @@ void main() {
       expect(find.text('Reto 1'), findsOneWidget);
     });
 
-    testWidgets('a skip control appears only when there is another item',
+    testWidgets(
+        'a skip control appears only when there is another item — one item has '
+        'nowhere to skip to, and on the teaching item the control completed '
+        'the first run with nothing solved',
         (WidgetTester tester) async {
-      // One item has nowhere to skip to, and the control routed to `_next` —
-      // which on the last item calls `onFinished`. On the one-item tutorial that
-      // completed the first run with nothing solved.
       await _pump(tester);
       expect(find.text('Saltar este reto'), findsNothing);
 
@@ -348,11 +359,10 @@ void main() {
       await _press(tester, '2');
       await _press(tester, 'submit');
 
-      // A verdict is its own screen now, so the keypad is not on it — a player
-      // reaching for the pad after a result cannot seed the next answer with
-      // whatever they happen to hit, because there is nothing to hit.
       expect(find.byType(VerdictRing), findsOneWidget);
-      expect(find.byType(Keypad), findsNothing);
+      expect(find.byType(Keypad), findsNothing,
+          reason: 'a verdict is its own screen, so a player reaching for the '
+              'pad cannot seed the next answer with whatever they hit');
 
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
@@ -366,9 +376,9 @@ void main() {
     testWidgets('there is no visible timer', (WidgetTester tester) async {
       await _pump(tester);
 
-      // CLAUDE.md: no visible timer, ever. Time is measured quietly.
       for (final Text text in tester.widgetList<Text>(find.byType(Text))) {
-        expect(text.data ?? '', isNot(matches(RegExp(r'\d+:\d\d'))));
+        expect(text.data ?? '', isNot(matches(RegExp(r'\d+:\d\d'))),
+            reason: 'no visible timer, ever — time is measured quietly');
       }
     });
 
@@ -380,12 +390,11 @@ void main() {
   });
 
   group('what is shown is what is graded', () {
-    testWidgets('a full-length answer is displayed in full',
+    testWidgets(
+        'a full-length answer is displayed in full, because a clipped one '
+        'means the answer shown and the answer graded differ and backspacing '
+        'a hidden character looks like a keypress that did nothing',
         (WidgetTester tester) async {
-      // The slot is 140px and a Darumadrop `0` advances ~27px at 40px, so it
-      // held five or six digits while AnswerDraft.maxLength permits twelve.
-      // Clipped, the answer shown and the answer graded differed — and
-      // backspacing a hidden character looked like a keypress that did nothing.
       await _pump(tester);
       for (int i = 0; i < AnswerDraft.maxLength; i++) {
         await _press(tester, '8');
@@ -399,14 +408,6 @@ void main() {
       );
       final Rect text = tester.getRect(answer);
 
-      // **Both corners, on real rects.** The first version of this assertion
-      // read `text.width * (slot.width / text.width) <= slot.width + 0.5`,
-      // which reduces to `slot.width <= slot.width + 0.5` — true of any widget
-      // tree, and so no test at all. It was written to hold down a *painting*
-      // defect and held down nothing.
-      //
-      // Checking only the top-left would repeat last round's miss: an overflow
-      // on the right can never violate it.
       expect(
         slot.inflate(1).contains(text.topLeft),
         isTrue,
@@ -439,12 +440,11 @@ void main() {
   });
 
   group('a finished series reports what happened, item by item', () {
-    testWidgets('the outcomes come back in the order they were answered',
+    testWidgets(
+        'the outcomes come back in the order they were answered, because a '
+        'count cannot draw the ring — correct: 1, total: 2 cannot say which '
+        'one was missed, and the round is the only thing that graded them',
         (WidgetTester tester) async {
-      // **A count cannot draw the ring.** `2.5` shows one mark per item in
-      // series order, and `correct: 1, total: 2` cannot say which one was
-      // missed — the round is the only thing that knows, because it graded
-      // them.
       RoundOutcome? outcome;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -459,8 +459,7 @@ void main() {
         ),
       );
 
-      // Right on the first item, wrong on the second.
-      for (final String id in <String>['4', '2', 'submit']) {
+      for (final String id in <String>[..._rightAnswer, 'submit']) {
         await _press(tester, id);
       }
       await tester.tap(find.text('Siguiente'));
@@ -477,10 +476,11 @@ void main() {
       expect(outcome!.total, 2);
     });
 
-    testWidgets('a clean series reports every item correct',
+    testWidgets(
+        'a clean series reports every item correct — the control, since an '
+        'outcomes list that always reported a slip would satisfy the ordering '
+        'test above on its wrong half alone',
         (WidgetTester tester) async {
-      // The control: an `outcomes` that always reported a slip would satisfy
-      // the ordering test above on its wrong half alone.
       RoundOutcome? outcome;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -510,11 +510,12 @@ void main() {
       expect(outcome!.stumble, isNull, reason: 'nothing went wrong to explain');
     });
 
-    testWidgets('the first slip is the one carried out, not the last',
+    testWidgets(
+        'the first slip is the one carried out and not the last — the summary '
+        'explains one mistake, the earliest most likely caused the rest, and '
+        'picking the latest would rewrite the block every time a tired player '
+        'slipped again at the end',
         (WidgetTester tester) async {
-      // `2.5` explains one mistake. The earliest is the one that most likely
-      // caused the rest, and picking the latest would rewrite the block every
-      // time a tired player slipped again at the end.
       RoundOutcome? outcome;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -533,9 +534,7 @@ void main() {
         ),
       );
 
-      // Wrong on both, so "first" and "last" are distinguishable only if the
-      // round is actually keeping the first.
-      for (final String id in <String>['7', 'submit']) {
+      for (final String id in <String>[_anotherWrongAnswer, 'submit']) {
         await _press(tester, id);
       }
       await tester.tap(find.text('Intentar otro'));
@@ -552,10 +551,11 @@ void main() {
       expect(outcome!.stumbleIndex, 0);
     });
 
-    testWidgets('a pack with no diagnosis copy carries no explanation',
+    testWidgets(
+        'a pack with no diagnosis copy carries no explanation — absent rather '
+        'than invented, because the words are the pack\'s and a round given '
+        'none has nothing true to say about the slip',
         (WidgetTester tester) async {
-      // Absent rather than invented: the copy is the pack's, and a round that
-      // was given none has nothing true to say about the slip.
       RoundOutcome? outcome;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -588,17 +588,12 @@ void main() {
   });
 
   group('the round reports the verdict it decided, for the local record', () {
-    testWidgets('onGraded fires once per answer with the verdict and the time',
+    testWidgets(
+        'onGraded fires once per answer with the verdict and the time — the '
+        'seam features/stats/ needs, so that a recorder never calls gradeItem '
+        'again and makes a second decision about one answer',
         (WidgetTester tester) async {
-      // **The seam `features/stats/` needs, and it exists so nobody grades
-      // twice.** `onAnswered` carries what the *server* needs and deliberately
-      // no verdict, because the frozen schema has nowhere to put one and the
-      // server regrades. A recorder calling `gradeItem` again at the call site
-      // would be a second decision about one answer — the exact defect
-      // `diagnose` was fixed for.
       final List<(Verdict, Duration)> graded = <(Verdict, Duration)>[];
-      // Two instants: `initState` takes the first as the item's start, and
-      // `_submit` takes the second as the moment it was answered.
       final List<DateTime> instants = <DateTime>[
         DateTime(2026, 8, 20, 9),
         DateTime(2026, 8, 20, 9, 0, 7),
@@ -629,8 +624,10 @@ void main() {
       expect(graded.single.$2, const Duration(seconds: 7));
     });
 
-    testWidgets('a wrong answer is reported too', (WidgetTester tester) async {
-      // The control: a recorder fed only the wins would report 100% for ever.
+    testWidgets(
+        'a wrong answer is reported too — the control, since a recorder fed '
+        'only the wins would report 100% for ever',
+        (WidgetTester tester) async {
       final List<Verdict> graded = <Verdict>[];
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -652,11 +649,11 @@ void main() {
       expect(graded, <Verdict>[Verdict.wrong]);
     });
 
-    testWidgets('a round with no recorder wired reports nothing',
+    testWidgets(
+        'a round with no recorder wired reports nothing, which is how the '
+        'teaching item stays out of the figures — there is nothing to record '
+        'into rather than a rule somebody has to remember',
         (WidgetTester tester) async {
-      // **How the teaching item stays out of the figures.** `0.3` is built
-      // without a recorder, the same construction that keeps it out of the day
-      // log — there is nothing to record into rather than a rule to remember.
       await _pump(tester);
 
       for (final String id in <String>['4', '2', 'submit']) {

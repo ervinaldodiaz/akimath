@@ -35,13 +35,15 @@ class NumberSeriesView extends StatelessWidget {
   /// Nominal numeral size, before text scaling.
   final double size;
 
+  /// The terms in a single row.
+  ///
+  /// **One row, and the caller scales it.** `RoundScreen` draws every prompt
+  /// inside a `FittedBox(scaleDown)`, which is what lets a long arithmetic
+  /// expression shrink instead of clipping; a series is the same problem with
+  /// more tiles. Wrapping onto a second line was the first attempt and it
+  /// looked like two series rather than one.
   @override
   Widget build(BuildContext context) {
-    // **One row, and the caller scales it.** `RoundScreen` draws every prompt
-    // inside a `FittedBox(scaleDown)`, which is what lets a long arithmetic
-    // expression shrink instead of clipping; a series is the same problem with
-    // more tiles. Wrapping onto a second line was the first attempt and it
-    // looked like two series rather than one.
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[

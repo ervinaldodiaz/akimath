@@ -45,11 +45,7 @@ void main() {
   });
 
   group('what a draft refuses', () {
-    test('a character the grader cannot read is ignored', () {
-      // The item pad ships `,` and `²` because the design draws them, and the
-      // frozen answer shape admits neither. Before this, one tap on either
-      // produced a draft `grade` could only score wrong — two keys of sixteen
-      // that punished a child for the app's own gap.
+    test('a character the grader cannot read never reaches the draft', () {
       for (final String rejected in <String>[',', '²', 'x', '.', '+']) {
         expect(
           AnswerDraft.empty.type('4').type(rejected).text,
@@ -64,11 +60,8 @@ void main() {
       expect(AnswerDraft.empty.type(',').text, isEmpty);
     });
 
-    test('the accepted set is exactly what a canonical answer can contain', () {
-      // Kept in agreement with the canonicaliser here rather than by memory.
-      // Every accepted character is exercised in a position where it is legal,
-      // and the result must canonicalise — an accepted character the grader
-      // cannot read is the defect this whole group exists for.
+    test('every accepted character canonicalises, checked against the grader '
+        'rather than from memory', () {
       expect(
         AnswerDraft.acceptedCharacters,
         <String>{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '−', '/'},
@@ -82,8 +75,6 @@ void main() {
     });
 
     test('the keys the pad offers but the grader cannot read are excluded', () {
-      // `,` and `²` are on KeypadLayout.item because the design draws them.
-      // Neither appears in a canonical answer, so neither may reach a draft.
       expect(AnswerDraft.acceptedCharacters, isNot(contains(',')));
       expect(AnswerDraft.acceptedCharacters, isNot(contains('²')));
     });
@@ -93,13 +84,12 @@ void main() {
       expect(AnswerDraft.empty.type('−').type('5').text, '−5');
     });
 
-    test('a draft has a length ceiling', () {
+    test('a held key stops at the ceiling rather than overflowing the slot',
+        () {
       AnswerDraft draft = AnswerDraft.empty;
       for (int i = 0; i < 40; i++) {
         draft = draft.type('9');
       }
-      // Without a ceiling a child holding a key fills the slot until it
-      // overflows the screen the overflow gate is meant to protect.
       expect(draft.text.length, AnswerDraft.maxLength);
     });
   });

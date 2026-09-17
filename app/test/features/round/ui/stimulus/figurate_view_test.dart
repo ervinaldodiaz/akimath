@@ -43,20 +43,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the hole is a question mark, not an empty box',
+    testWidgets(
+        'the hole is a question mark and not an empty box, which beside three '
+        'dotted ones would read as a figure of zero',
         (WidgetTester tester) async {
-      // A blank square beside three dotted ones reads as a figure of zero
-      // rather than as the question.
       await _pump(tester, unknownIndex: 3);
 
       expect(find.text('?'), findsOneWidget);
     });
 
-    testWidgets('only the figures that are given are painted',
+    testWidgets(
+        'only the figures that are given are painted — three painters for four '
+        'boxes, because painting the hidden one would show the learner the '
+        'answer as a count of dots',
         (WidgetTester tester) async {
-      // Three painters for four boxes: the hole draws a `?` instead. A view
-      // that painted the hidden figure would show the learner the answer as a
-      // count of dots.
       await _pump(tester, unknownIndex: 3);
 
       expect(find.byType(CustomPaint).evaluate().length, greaterThan(0));
@@ -97,11 +97,11 @@ void main() {
   });
 
   group('the painter is fed by the spec, not by itself', () {
-    testWidgets('each painted figure carries its own layout',
+    testWidgets(
+        'each painted figure carries its own layout, because one shared layout '
+        'would draw four identical figures with no rule to find and every '
+        'count assertion above would still pass',
         (WidgetTester tester) async {
-      // The dot counts differ per figure, so the layouts must too. One shared
-      // layout would draw four identical figures and there would be no rule
-      // to find — and every count assertion above would still pass.
       await _pump(tester, unknownIndex: 3);
 
       final List<CustomPaint> painted = tester
@@ -113,8 +113,8 @@ void main() {
               (p.painter! as FigurateDotsPainter).layout.radius)
           .toList();
 
-      // 1, 3, 6 — strictly growing counts, so strictly shrinking radii.
-      expect(radii[0], greaterThan(radii[1]));
+      expect(radii[0], greaterThan(radii[1]),
+          reason: '1, 3, 6 — strictly growing counts, so shrinking radii');
       expect(radii[1], greaterThan(radii[2]));
       expect(radii[2], figurateLayout(6).radius);
     });

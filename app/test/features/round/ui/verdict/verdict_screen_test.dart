@@ -66,10 +66,11 @@ void main() {
       expect(find.textContaining('en ese orden'), findsOneWidget);
     });
 
-    testWidgets('the paragraph is not printed as well',
+    testWidgets(
+        'the paragraph is not printed as well, because `explain` says the same '
+        'thing at length and a screen printing both asks a player to read it '
+        'twice',
         (WidgetTester tester) async {
-      // `explain` says the same thing at length. A screen printing both asks a
-      // player to read it twice.
       tester.view
         ..physicalSize = const Size(390, 844)
         ..devicePixelRatio = 1;
@@ -96,10 +97,11 @@ void main() {
       expect(find.textContaining('importa mucho de verdad'), findsNothing);
     });
 
-    testWidgets('a correct answer is told nothing, even if handed a diagnosis',
+    testWidgets(
+        'a correct answer is told nothing even if handed a diagnosis — nothing '
+        'constructs the pairing, and the screen still must not print an '
+        'explanation over a right answer',
         (WidgetTester tester) async {
-      // `03 Acierto` is unchanged. Nothing constructs this pairing, and the
-      // screen still must not print an explanation over a right answer.
       tester.view
         ..physicalSize = const Size(390, 844)
         ..devicePixelRatio = 1;
@@ -129,11 +131,11 @@ void main() {
 
 
   group('the error screen names the reasoning, never the failure', () {
-    testWidgets('none of the four forbidden words appears',
+    testWidgets(
+        'none of the four forbidden words appears, asserted over the rendered '
+        'tree rather than trusted to review and over both moods rather than '
+        'only the wrong one — a scolding word is no better on a right answer',
         (WidgetTester tester) async {
-      // req-diagnosis-copy. Asserted over the rendered tree rather than trusted
-      // to review, and over both moods rather than only the wrong one — a
-      // scolding word is no better on a right answer.
       for (final Verdict verdict in Verdict.values) {
         await _pump(tester, verdict);
 
@@ -153,9 +155,10 @@ void main() {
       }
     });
 
-    testWidgets('the wrong screen still says something', (WidgetTester tester) async {
-      // A screen that passed the check above by rendering no copy at all would
-      // be worse than one that scolded.
+    testWidgets(
+        'the wrong screen still says something, since passing the check above '
+        'by rendering no copy at all would be worse than scolding',
+        (WidgetTester tester) async {
       await _pump(tester, Verdict.wrong);
       expect(_copy(tester), isNotEmpty);
       expect(find.textContaining('Casi'), findsOneWidget);
@@ -169,18 +172,20 @@ void main() {
       expect(tester.widget<Aki>(find.byType(Aki)).pose, AkiPose.correct);
     });
 
-    testWidgets('a wrong answer shows the slip pose, never a sad one',
+    testWidgets(
+        'a wrong answer shows the slip pose and never a sad one — the tail '
+        'curl is the one body part that can be lost and come back, and it is '
+        'already growing back in green, which is the whole cost',
         (WidgetTester tester) async {
-      // The tail curl is the one body part that can be lost and come back, and
-      // it is already growing back in green. That is the whole cost.
       await _pump(tester, Verdict.wrong);
       expect(tester.widget<Aki>(find.byType(Aki)).pose, AkiPose.slip);
     });
 
-    testWidgets('her art overflows the band upward rather than clipping',
+    testWidgets(
+        'her art overflows the band upward rather than clipping — 182 px of '
+        'art in a 156 px band, where a fixed-height Column child would clip '
+        'or throw',
         (WidgetTester tester) async {
-      // 182px of art in a 156px band — 26px of deliberate upward overflow. A
-      // fixed-height Column child would clip or throw.
       await _pump(tester, Verdict.wrong);
 
       expect(tester.takeException(), isNull);
@@ -203,10 +208,11 @@ void main() {
       expect(find.text('4,2 s'), findsOneWidget);
     });
 
-    testWidgets('no rating appears, and no placeholder for one',
+    testWidgets(
+        'no rating appears and no placeholder for one, so nothing here is a '
+        'figure sync could later contradict — a greyed-out pill would be '
+        'exactly that (Q3)',
         (WidgetTester tester) async {
-      // Q3: F2 has no server, so nothing here is a figure sync could later
-      // contradict. A greyed-out pill would be exactly that.
       for (final Verdict verdict in Verdict.values) {
         await _pump(tester, verdict);
         final String all = _copy(tester).join(' ').toLowerCase();
@@ -249,10 +255,9 @@ void main() {
         (WidgetTester tester) async {
       await _pump(tester, Verdict.correct);
 
-      // `4,2 s` is a measurement. `0:04` would be a timer, and CLAUDE.md
-      // forbids a visible one anywhere.
       for (final String text in _copy(tester)) {
-        expect(text, isNot(matches(RegExp(r'\d+:\d\d'))));
+        expect(text, isNot(matches(RegExp(r'\d+:\d\d'))),
+            reason: '"$text" reads as a clock; `4,2 s` is a measurement');
       }
     });
   });

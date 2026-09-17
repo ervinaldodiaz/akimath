@@ -42,21 +42,26 @@ class HiddenOperationView extends StatelessWidget {
   /// Nominal numeral size, before text scaling.
   final double size;
 
+  /// The worked rows, the rule, then the question.
+  ///
+  /// **`IntrinsicWidth`, so the rule is exactly as wide as the machine.** A
+  /// `double.infinity` divider inside a `Column(min)` that a `FittedBox` then
+  /// measures is an unbounded-width assertion, and computing the row width by
+  /// hand would mean re-deriving [StimulusTile]'s padding, border and shadow
+  /// here — three numbers that would go stale silently.
+  ///
+  /// Each row is centred inside the stretched column, so `stretch` reaches the
+  /// rule without also left-aligning every row. The rule sits above the query
+  /// so it reads as what is *asked* rather than as a fourth thing the learner
+  /// was given.
   @override
   Widget build(BuildContext context) {
-    // **`IntrinsicWidth`, so the rule is exactly as wide as the machine.**
-    // A `double.infinity` divider inside a `Column(min)` that a `FittedBox`
-    // then measures is an unbounded-width assertion, and computing the row
-    // width by hand would mean re-deriving `StimulusTile`'s padding, border
-    // and shadow here — three numbers that would go stale silently.
     return IntrinsicWidth(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           for (final ({int input, int output}) example in examples) ...<Widget>[
-            // Centred inside the stretched column, so `stretch` reaches the
-            // rule without also left-aligning every row.
             Center(
               child: _row(
                 StimulusTile.given(example.input, size: size),
@@ -65,8 +70,6 @@ class HiddenOperationView extends StatelessWidget {
             ),
             const SizedBox(height: BrandShape.space2),
           ],
-          // A rule, then the question — so the query reads as what is *asked*
-          // rather than as a fourth thing the learner was given.
           const SizedBox(
             height: BrandShape.borderWidthField,
             child: ColoredBox(color: BrandColors.ink),

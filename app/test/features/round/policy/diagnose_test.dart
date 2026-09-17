@@ -16,10 +16,10 @@ const Diagnosis _fallback = Diagnosis(
   explain: 'Repasa el reto con calma.',
 );
 
+/// `26 − 17 = 9`. Subtracting in the wrong order gives `−9`, which is the
+/// distractor every test in this file is about.
 Item _item({Map<String, Diagnosis> distractors = const <String, Diagnosis>{}}) => Item(
       id: 'sub-1',
-      // 26 − 17 = 9. Subtracting in the wrong order gives −9, which is the
-      // distractor these tests are about.
       stimulus: const ArithmeticStimulus(<PromptToken>[
         PromptToken.text('26'),
         PromptToken.operator('−'),
@@ -30,11 +30,14 @@ Item _item({Map<String, Diagnosis> distractors = const <String, Diagnosis>{}}) =
       ladderStep: 3,
     );
 
+/// What the screen would say about [answer].
+///
+/// **The verdict is handed in**, so this computes it once with the same
+/// function the round does and passes it along. Nothing here can disagree with
+/// the screen, because nothing here decides the verdict a second time.
 Diagnosis? _for(String answer, {Map<String, Diagnosis>? distractors}) {
   final Item item =
       _item(distractors: distractors ?? <String, Diagnosis>{'-9': _reversed});
-  // **The verdict is handed in now**, so the helper computes it once with the
-  // same function the round does. Nothing here can disagree with the screen.
   return diagnoseItem(
     item: item,
     typed: answer,
@@ -45,16 +48,13 @@ Diagnosis? _for(String answer, {Map<String, Diagnosis>? distractors}) {
 
 void main() {
   group('a wrong answer always gets something to read', () {
-    test('an anticipated one gets its own steps', () {
-      // A player who subtracted in the wrong order and one who mistyped should
-      // not get the same screen.
+    test('an anticipated one gets its own steps, so the player who subtracted '
+        'backwards and the player who mistyped see different screens', () {
       expect(_for('-9'), _reversed);
     });
 
-    test('anything else gets the fallback', () {
-      // The common case: the shipped pack carries distractors for a handful of
-      // items, and an empty diagnosis would leave the screen as bare as it is
-      // today.
+    test('anything else gets the fallback, which is the common case and the '
+        'difference between a screen and a bare one', () {
       expect(_for('42'), _fallback);
     });
 
@@ -62,22 +62,16 @@ void main() {
       expect(_for('42', distractors: const <String, Diagnosis>{}), _fallback);
     });
 
-    test('an unreadable answer gets the fallback rather than nothing', () {
-      // `canonicalise` refuses `9,0` and `--` outright. A player who typed one
-      // is still owed a screen.
+    test('an answer the canonicaliser refuses outright gets the fallback '
+        'rather than nothing, because that player is still owed a screen', () {
       expect(_for('9,0'), _fallback);
       expect(_for('--'), _fallback);
     });
   });
 
   group('the keypad\'s minus and the author\'s are the same minus', () {
-    test('a typed U+2212 matches a distractor authored with a hyphen', () {
-      // **This is the whole reason both sides go through the canonicaliser.**
-      // The keypad emits U+2212 and a content author types the ASCII hyphen on
-      // their keyboard, so the two never meet as strings. Learner mode folds
-      // the typographic minus; stored mode does not, which is exactly why the
-      // authored side is canonicalised in stored mode and the typed side in
-      // learner mode — the same pairing `grade` uses.
+    test('a typed U+2212 matches a distractor authored with a hyphen, which is '
+        'the whole reason both sides go through the canonicaliser', () {
       expect(_for('−9'), _reversed);
       expect(_for('-9'), _reversed);
     });
@@ -87,20 +81,16 @@ void main() {
       expect(_for('-90'), _fallback);
     });
 
-    test('a key that is not storage-canonical never matches', () {
-      // The reader refuses such a pack at load, naming the item. This is the
-      // consequence if one ever reached here: a dead key, and a player who
-      // still gets the fallback rather than a screen with nothing on it.
+    test('a key that is not storage-canonical is a dead key whose player still '
+        'gets the fallback, not a screen with nothing on it', () {
       expect(
         _for('-9', distractors: <String, Diagnosis>{'- 9': _reversed}),
         _fallback,
       );
     });
 
-    test('the lookup is by canonical value, not by the raw text', () {
-      // A map keyed by what the player typed would miss every time the keypad
-      // and the author spell the same number differently — which is always,
-      // for a negative.
+    test('the lookup is by canonical value and not by the raw text, which for '
+        'a negative would miss every time', () {
       expect(
         _for('−9', distractors: <String, Diagnosis>{'-9': _reversed}),
         _reversed,
@@ -113,11 +103,8 @@ void main() {
       expect(_for('9'), isNull);
     });
 
-    test('a distractor that shadows the correct answer never wins', () {
-      // It reuses `grade`, so it cannot disagree with the verdict the player
-      // was just shown — two implementations of "is this right" is the drift
-      // worth avoiding here. The reader refuses such a pack; this is the second
-      // line of defence.
+    test('a distractor that shadows the correct answer never wins, because the '
+        'handed-in verdict settles it before any lookup happens', () {
       expect(
         _for('9', distractors: <String, Diagnosis>{'9': _reversed}),
         isNull,

@@ -33,18 +33,13 @@ Future<void> _pump(
 
 void main() {
   group('nothing between two numbers reads as arithmetic', () {
-    testWidgets('the analogy joins them with an arrow, not a chevron',
+    testWidgets(
+        'the mark between two numbers is mapsTo and never forward, asked of '
+        'the glyph rather than of a character — a chevron set between numerals '
+        'reads as the false claim 2 > 4',
         (WidgetTester tester) async {
-      // `2 › 4` is indistinguishable from `2 > 4`, which is false — and this is
-      // the one screen where a player is being asked to read a relationship off
-      // the numbers in front of them.
       await _pump(tester, unknownIndex: 3);
 
-      // **Asked of the glyph, not of a character.** These lines used to read
-      // `find.text('→')`, which was true of the stand-in and says nothing now
-      // that a glyph is geometry. What has to hold is unchanged: the mark
-      // between the two numbers is `mapsTo` — *becomes* — and never `forward`,
-      // whose stand-in `›` set between numerals reads as `>`.
       expect(find.text('›'), findsNothing);
       expect(find.text('>'), findsNothing);
 
@@ -79,12 +74,11 @@ void main() {
       expect(find.text('10'), findsNothing);
     });
 
-    testWidgets('the hole can sit in the first pair too',
+    testWidgets(
+        'the hole can sit in the first pair too, because unknown_index walks '
+        'all four terms and a renderer assuming it is last would draw the '
+        'answer',
         (WidgetTester tester) async {
-      // `unknown_index` walks all four terms, so hiding one of the *first*
-      // pair's is a legal payload and a genuinely different question: it asks
-      // the learner to run the rule backwards from the pair that is intact.
-      // A renderer that assumed the hole was always last would draw the answer.
       await _pump(tester, unknownIndex: 1);
 
       expect(find.text('4'), findsNothing);
@@ -94,10 +88,11 @@ void main() {
   });
 
   group('the bridge separates the two pairs', () {
-    testWidgets('two terms fall each side of it', (WidgetTester tester) async {
-      // The layout claim that matters: a reader has to see two statements, not
-      // four loose numbers. Without this, the bridge could render anywhere in
-      // the row and every count above would still pass.
+    testWidgets(
+        'two terms fall each side of it, so a reader sees two statements and '
+        'not four loose numbers — without this the bridge could render '
+        'anywhere and every count above would still pass',
+        (WidgetTester tester) async {
       await _pump(tester, unknownIndex: 3);
 
       final double bridge =
@@ -111,11 +106,12 @@ void main() {
   });
 
   group('the hole is distinguishable without hue', () {
-    testWidgets('exactly one tile is dashed', (WidgetTester tester) async {
+    testWidgets(
+        'exactly one of the four tiles is dashed — the bridge is a StatPill '
+        'rather than a CandySurface, so it is not among them',
+        (WidgetTester tester) async {
       await _pump(tester, unknownIndex: 2);
 
-      // The bridge is a `StatPill`, not a `CandySurface`, so the four tiles are
-      // the only ones counted here.
       final List<CandySurface> tiles =
           tester.widgetList<CandySurface>(find.byType(CandySurface)).toList();
       final Iterable<CandySurface> dashed =

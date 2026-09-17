@@ -126,11 +126,18 @@ class SeriesSummaryScreen extends StatelessWidget {
     return 'Serie terminada. Poco a poco.';
   }
 
+  /// The scrolling body, and the one button under it.
+  ///
+  /// **A `Scaffold` and not a bare `ColoredBox`.** Without a `Material`
+  /// ancestor Flutter paints a yellow debug underline under every run of text,
+  /// which looks like a defect and which
+  /// `test/design/screen_text_style_test.dart` fails on.
+  ///
+  /// **One button, and no `Ver el reto que falló`.** The design draws a second
+  /// one; nothing reviews a past item, so it would be a control that does
+  /// nothing. Absent rather than dead (DR-P2).
   @override
   Widget build(BuildContext context) {
-    // Scaffold, not a bare ColoredBox: without a Material ancestor Flutter
-    // paints a yellow debug underline under every run of text, which looks like
-    // a defect and which `screen_text_style_test.dart` now fails on.
     return Scaffold(
       backgroundColor: BrandColors.cream,
       body: SafeArea(
@@ -144,9 +151,6 @@ class SeriesSummaryScreen extends StatelessWidget {
                 BrandShape.space4,
                 BrandShape.space3,
               ),
-              // **One button, and no `Ver el reto que falló`.** The design draws
-              // a second one; nothing reviews a past item, so it would be a
-              // control that does nothing. Absent rather than dead.
               child: BrandButton.primary(
                 label: 'Volver al inicio',
                 onPressed: onDone,
@@ -270,6 +274,11 @@ class SeriesSummaryScreen extends StatelessWidget {
   ///
   /// Returns a list so the gap above it disappears with it; a `SizedBox` left
   /// behind is a paragraph of blank cream nobody can explain.
+  ///
+  /// The heading is set in ink rather than the eyebrow's default muted: `4.1`'s
+  /// muted eyebrow sits on white, and the design sets this one on ink because
+  /// the card is coral. The item is numbered from one, because a player counts
+  /// from one.
   List<Widget> _whatWentWrong() {
     final Diagnosis? stumble = result.stumble;
     if (stumble == null) {
@@ -290,14 +299,10 @@ class SeriesSummaryScreen extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'QUÉ SE TORCIÓ',
-                    // Ink, not the default muted: `4.1`'s muted eyebrow sits on
-                    // white, and the design sets this one on ink because the
-                    // card is coral.
                     style: BrandText.eyebrow(color: BrandColors.ink),
                   ),
                 ),
                 if (at != null)
-                  // Counting from one, because a player counts from one.
                   Text('Reto ${at + 1}', style: BrandText.eyebrow(color: BrandColors.ink)),
               ],
             ),

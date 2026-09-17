@@ -39,11 +39,23 @@ class StimulusTile extends StatelessWidget {
   /// Nominal numeral size, before text scaling.
   final double size;
 
+  /// The tile: a fill, an outline and either a value or a `?`.
+  ///
+  /// **Its appearance is resolved once, by `resolveTermVisual`.** Choosing the
+  /// hue here with a conditional is what
+  /// `test/architecture/no_hue_by_comparison_test.dart` fails the build for,
+  /// and it caught exactly that on the first run of the series view. Only the
+  /// hole is dashed, so the pair still reads as different with the hue gone.
+  ///
+  /// The width is a floor rather than a fit, so a one-digit value and a
+  /// three-digit value make a row that reads as a series rather than as tiles
+  /// of assorted widths.
+  ///
+  /// `EsMxNumber` runs here rather than in the content: a thousand is `1 000`
+  /// in es-MX, and a pack shipping the spelled string would have put that
+  /// decision beyond the reach of any gate.
   @override
   Widget build(BuildContext context) {
-    // Resolved once, in `resolveTermVisual`. Choosing the hue here with a
-    // conditional is what `no_hue_by_comparison_test` fails the build for, and
-    // it caught exactly that on the first run of the series view.
     final TermVisual visual = resolveTermVisual(_state);
     final int? value = _value;
 
@@ -52,21 +64,15 @@ class StimulusTile extends StatelessWidget {
       borderRadius: BrandShape.radiusChip,
       borderWidth: BrandShape.borderWidth,
       shadowOffset: BrandShape.shadowPill,
-      // Dashed only on the hole, so the difference survives with the hue gone.
       borderDash: visual.dash,
       padding: const EdgeInsets.symmetric(
         horizontal: BrandShape.space3,
         vertical: BrandShape.space2,
       ),
-      // A minimum width, so a one-digit value and a three-digit value make a
-      // row that reads as a series rather than as tiles of assorted widths.
       child: SizedBox(
         width: size,
         child: Center(
           child: Text(
-            // `EsMxNumber` runs here rather than in the content: a thousand is
-            // `1 000` in es-MX, and a pack shipping the string would have put
-            // that decision beyond the reach of any gate.
             value == null ? '?' : EsMxNumber.integer(value),
             maxLines: 1,
             style: BrandText.numeral(size * 0.7),

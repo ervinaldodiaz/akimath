@@ -39,6 +39,11 @@ import '../../../design/widgets/spec/verdict.dart';
 /// dead. The authored key is *not* canonicalised because it cannot need it:
 /// `Pack.fromJson` refuses a key that is not already storage-canonical, by name
 /// and at load.
+///
+/// **A null [key] needs no guard of its own.** It is what the caller hands over
+/// when it could not resolve one — an answer the canonicaliser refused, which
+/// no authored key can equal — so the lookup misses and the fallback answers,
+/// which is the same thing an unanticipated wrong answer gets.
 Diagnosis? diagnose({
   required Map<String, Diagnosis> distractors,
   required String? key,
@@ -49,8 +54,5 @@ Diagnosis? diagnose({
     return null;
   }
 
-  // Null when the caller could not resolve a key — an answer the canonicaliser
-  // refused, which no key can equal. It falls through to the fallback rather
-  // than needing a guard of its own.
   return distractors[key] ?? fallback;
 }

@@ -46,6 +46,14 @@ class RoundScreen extends StatefulWidget {
     this.onGraded,
   });
 
+  /// The items to play, in order. At least one.
+  ///
+  /// **Non-emptiness is an `initState` assert and not a constructor one.**
+  /// `items.length` is not a constant expression, so a `const` constructor
+  /// cannot check it. Unreachable through `RoundRoute` — `Pack.fromJson`
+  /// refuses an empty pack — but this constructor is public and `required`
+  /// does not mean non-empty. Unchecked, an empty list makes `_item` a
+  /// `RangeError` and advancing a modulo by zero.
   final List<Item> items;
 
   /// What `04 Error` says when no distractor anticipated the answer, from the
@@ -184,25 +192,12 @@ class _RoundScreenState extends State<RoundScreen> {
   @override
   void initState() {
     super.initState();
-    // Not a constructor assert: `items.length` is not a constant expression, so
-    // a const constructor cannot check it. Unreachable through `RoundRoute` —
-    // `Pack.fromJson` refuses an empty pack — but the constructor is public and
-    // `required` does not mean non-empty. Without this, `_item` is a RangeError
-    // and `_next` a modulo by zero.
     assert(
       widget.items.isNotEmpty,
       'a round needs at least one item to play',
     );
-    // **Eagerly, here, and not as a `late` initializer.** A `late` field with an
-    // initializer evaluates it on first *read*, and nothing reads this while the
-    // item is on screen — the first read was inside `_submit`, *after* the finish
-    // instant had been captured. Every round's first item therefore reported a
-    // negative duration, which is every first verdict a player ever sees.
     _startedAt = widget.now();
     _roundStartedAt = _startedAt;
-    // **Indexed by item, not appended per submission.** A one-item round lets a
-    // wrong answer be retried, and appending would report three outcomes for a
-    // round whose `total` is one.
     _outcomes = List<Verdict?>.filled(widget.items.length, null);
     _stumbles = List<Diagnosis?>.filled(widget.items.length, null);
   }
@@ -212,6 +207,10 @@ class _RoundScreenState extends State<RoundScreen> {
 
   /// What each item's answer was judged to be, by position. Null while an item
   /// is still unanswered, which is what a series left part-way looks like.
+  ///
+  /// **Indexed by item, never appended per submission.** A one-item round lets
+  /// a wrong answer be retried, and appending would report three outcomes for
+  /// a round whose `total` is one.
   late List<Verdict?> _outcomes;
 
   /// The diagnosis for each item's wrong answer, by the same positions.
@@ -224,8 +223,14 @@ class _RoundScreenState extends State<RoundScreen> {
   int _index = 0;
   AnswerDraft _draft = AnswerDraft.empty;
   VerdictSummary? _summary;
-  /// When the current item appeared. Assigned in `initState`, not lazily — see
-  /// there for the defect that earned the comment.
+  /// When the current item appeared.
+  ///
+  /// **Assigned eagerly in `initState`, never as a `late` initializer.** A
+  /// `late` field with an initializer evaluates it on first *read*, and nothing
+  /// reads this while the item is on screen — the first read was inside
+  /// `_submit`, *after* the finish instant had been captured. Every round's
+  /// first item therefore reported a negative duration, which is every first
+  /// verdict a player ever sees.
   late DateTime _startedAt;
 
   Item get _item => widget.items[_index];
@@ -260,19 +265,23 @@ class _RoundScreenState extends State<RoundScreen> {
   /// home reads the store and the store had never been written. That is the
   /// two-screens-one-morning contradiction `StreakPolicy` was fixed for, in the
   /// other direction. The figure shown is now the figure the store will yield.
+  ///
+  /// **`gradeItem`, not `grade`.** An issued pack states a digest instead of an
+  /// answer and the pure policy cannot compute an HMAC — see
+  /// `content/answer_digest.dart`. The authored pack's items take the path they
+  /// always did. That one verdict is then *handed* to `diagnoseItem` rather
+  /// than recomputed, so the screen's mood and the words under it cannot
+  /// disagree: one decision, made once.
+  ///
+  /// **The elapsed figure is wall clock, so a backgrounded app keeps counting.**
+  /// What time on task *should* mean across that gap is an open product
+  /// question; until it is answered, `api/time_on_task.dart` keeps the figure
+  /// sendable.
   void _submit() {
     final DateTime finishedAt = widget.now();
     final DayLogStore? store = widget.dayLog;
-    // Recorded before the verdict is built, and regardless of what it says.
-    unawaited(store?.record(finishedAt) ?? Future<void>.value());
-    // **`gradeItem`, not `grade`.** An issued pack states a digest instead of an
-    // answer, and the pure policy cannot compute an HMAC — see
-    // `content/answer_digest.dart`. The authored pack's items take the same
-    // path they always did.
+    _recordTodayAsPractised(store, finishedAt);
     final Verdict verdict = gradeItem(_item, _draft.text);
-    // Wall clock, so a backgrounded app keeps counting. What time on task
-    // *should* mean across that gap is an open product question; until it is
-    // answered, `api/time_on_task.dart` keeps the figure sendable.
     final Duration elapsed = finishedAt.difference(_startedAt);
     widget.onAnswered?.call(_item, _draft.text, elapsed);
     widget.onGraded?.call(verdict, elapsed);
@@ -280,8 +289,6 @@ class _RoundScreenState extends State<RoundScreen> {
       _correct += 1;
     }
     final Diagnosis? fallback = widget.fallbackDiagnosis;
-    // Null when the pack carries no copy at all. `diagnose` reuses `grade`, so
-    // it cannot disagree with the verdict above it.
     final Diagnosis? diagnosis = fallback == null
         ? null
         : diagnoseItem(
@@ -306,6 +313,16 @@ class _RoundScreenState extends State<RoundScreen> {
     );
   }
 
+  /// Writes today into the day log, before the verdict is even built.
+  ///
+  /// Nothing about the answer reaches here, which is how the streak counts days
+  /// practised rather than days won. A round built without a store — the
+  /// teaching item — records nothing, and that absence is the construction that
+  /// keeps it out of the figures.
+  void _recordTodayAsPractised(DayLogStore? store, DateTime finishedAt) {
+    unawaited(store?.record(finishedAt) ?? Future<void>.value());
+  }
+
   /// How the series went, assembled at the moment it ends.
   ///
   /// The outcomes stop at the first unanswered item rather than padding to the
@@ -319,8 +336,9 @@ class _RoundScreenState extends State<RoundScreen> {
       }
       answered.add(verdict);
     }
-    final int slipped = answered.indexOf(Verdict.wrong);
-    final Diagnosis? stumble = slipped == -1 ? null : _stumbles[slipped];
+    final int firstSlipIndex = answered.indexOf(Verdict.wrong);
+    final Diagnosis? stumble =
+        firstSlipIndex == -1 ? null : _stumbles[firstSlipIndex];
 
     return RoundOutcome(
       correct: _correct,
@@ -328,7 +346,7 @@ class _RoundScreenState extends State<RoundScreen> {
       elapsed: widget.now().difference(_roundStartedAt),
       outcomes: List<Verdict>.unmodifiable(answered),
       stumble: stumble,
-      stumbleIndex: stumble == null ? null : slipped,
+      stumbleIndex: stumble == null ? null : firstSlipIndex,
     );
   }
 
@@ -353,10 +371,10 @@ class _RoundScreenState extends State<RoundScreen> {
   /// is exactly why it needed closing before something does.
   void _next() {
     final void Function(RoundOutcome)? finished = widget.onFinished;
-    final bool lastItem = _index == widget.items.length - 1;
+    final bool isLastItem = _index == widget.items.length - 1;
     final bool retryTheOnlyItem =
         widget.items.length == 1 && _summary?.verdict != Verdict.correct;
-    if (finished != null && lastItem && !retryTheOnlyItem) {
+    if (finished != null && isLastItem && !retryTheOnlyItem) {
       finished(_howItWent());
       return;
     }
@@ -369,6 +387,12 @@ class _RoundScreenState extends State<RoundScreen> {
     });
   }
 
+  /// The item, or the verdict screen once the item has been answered.
+  ///
+  /// **A `Scaffold` and not a bare `ColoredBox`.** Without a `Material`
+  /// ancestor Flutter falls back to a `DefaultTextStyle` that paints a yellow
+  /// double underline under every run of text: a debug marker that looks like a
+  /// defect, and `test/design/screen_text_style_test.dart` fails on it.
   @override
   Widget build(BuildContext context) {
     final VerdictSummary? summary = _summary;
@@ -380,10 +404,6 @@ class _RoundScreenState extends State<RoundScreen> {
       );
     }
 
-    // Scaffold, not a bare ColoredBox: without a Material ancestor Flutter
-    // falls back to a DefaultTextStyle that paints a yellow double underline
-    // under every run of text. It is a debug marker, it looks like a defect,
-    // and `screen_text_style_test.dart` now fails on it.
     return Scaffold(
       backgroundColor: BrandColors.cream,
       body: SafeArea(
@@ -402,23 +422,10 @@ class _RoundScreenState extends State<RoundScreen> {
               const Spacer(),
               Keypad(
                 layout: KeypadLayout.item,
-                // A key whose output the grader can never accept is a trap
-                // rather than a feature — see `keysWithNoGradableAnswer`.
                 unavailable: KeypadLayout.keysWithNoGradableAnswer,
                 onKeyPressed: _onKey,
               ),
-              // **Skipping needs somewhere to skip to.** On a one-item round
-              // there is none, and the control did real damage: it routes to
-              // `_next`, which on the last item calls `onFinished` — so one tap
-              // on the teaching item's "Saltar este reto" completed the first
-              // run permanently with nothing ever solved, past a screen whose
-              // whole job is teaching the answer format. Derived from the items
-              // rather than passed in, so a one-item round cannot be built with
-              // the control by accident.
-              if (widget.items.length > 1) ...<Widget>[
-                const SizedBox(height: BrandShape.space3),
-                BrandButton.text(label: 'Saltar este reto', onPressed: _next),
-              ],
+              ..._skipControl(),
             ],
           ),
         ),
@@ -438,6 +445,29 @@ class _RoundScreenState extends State<RoundScreen> {
     Navigator.of(context).maybePop();
   }
 
+  /// `Saltar este reto`, on a round that has somewhere to skip to.
+  ///
+  /// **A one-item round gets none, and that is not a tidiness rule.** The
+  /// control routes to `_next`, which on the last item calls `onFinished` — so
+  /// one tap on the teaching item's skip completed the first run permanently
+  /// with nothing ever solved, past a screen whose whole job is teaching the
+  /// answer format. Derived from [RoundScreen.items] rather than passed in, so
+  /// a one-item round cannot be built with the control by accident.
+  List<Widget> _skipControl() {
+    if (widget.items.length <= 1) {
+      return const <Widget>[];
+    }
+    return <Widget>[
+      const SizedBox(height: BrandShape.space3),
+      BrandButton.text(label: 'Saltar este reto', onPressed: _next),
+    ];
+  }
+
+  /// `close · reto · nivel` — and deliberately no clock.
+  ///
+  /// Time is measured while the player solves and shown only on the verdict
+  /// screen (`req-quiet-timing`, and `CLAUDE.md`'s no visible timer). The level
+  /// stands where a timer would in another product.
   Widget _header() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -448,7 +478,6 @@ class _RoundScreenState extends State<RoundScreen> {
           child: const BrandIcon(BrandGlyph.close, size: 22),
         ),
         Text('Reto ${_index + 1}', style: BrandText.eyebrow()),
-        // No visible timer, ever — time is measured quietly (CLAUDE.md).
         Text('Nivel ${_item.ladderStep}', style: BrandText.eyebrow()),
       ],
     );
@@ -460,50 +489,54 @@ class _RoundScreenState extends State<RoundScreen> {
   /// error here rather than a screen that silently draws nothing. That is the
   /// whole reason `Stimulus` is sealed: `packages/contract` froze six kinds and
   /// the app ships them one at a time.
+  ///
+  /// The dispatch itself is [StimulusView]'s, shared with the home's preview
+  /// card, and its own doc comment holds why there is only one of it.
   Widget _prompt() {
-    // The dispatch lives in `StimulusView`, shared with the home's preview
-    // card. Two switches over one sealed type is how the two screens end up
-    // drawing different ideas of a matrix.
     return StimulusView(stimulus: _item.stimulus);
   }
 
+  /// The slot the typed answer appears in.
+  ///
+  /// **Pink dashed throughout: a focus affordance and never a verdict**
+  /// (`BrandColorRole.focus`). A judged answer leaves this screen entirely, so
+  /// the slot has no verdict state to carry and never needs a second hue.
+  ///
+  /// **Its inner padding is two untokenised values**, set to keep a 40 px
+  /// numeral clear of the 3 px outline at `textScaler` 1.3, and its width is
+  /// fixed so the slot does not resize as the player types.
+  ///
+  /// **The figure is scaled to fit and never clipped.** At 40 px a Darumadrop
+  /// `0` advances about 27 px, so 140 px holds five or six digits while
+  /// [AnswerDraft.maxLength] permits twelve. Clipping the overflow meant the
+  /// answer shown and the answer graded could differ — and worse, backspacing
+  /// a hidden character read as a keypress that did nothing.
+  ///
+  /// 40 px is half the prompt's 76: the answer is read rather than solved, so
+  /// it sits below the challenge in the visual hierarchy. The text carries a
+  /// key so a test can read the answer back without matching a keypad key that
+  /// happens to show the same digit.
   Widget _answerSlot() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
         CandySurface(
-          // Pink dashed throughout: a focus affordance, never a verdict
-          // (BrandColorRole.focus). A judged answer leaves this screen
-          // entirely, so the slot has no verdict state to carry.
           borderDash: DashSpec.locked,
           borderColor: BrandColorRole.focus.color,
           borderWidth: BrandShape.borderWidth,
           borderRadius: BrandShape.radiusSlot,
           shadowOffset: Offset.zero,
-          // No token at these two values; the slot's inner padding is set to
-          // keep a 40px numeral clear of the 3px outline at textScaler 1.3.
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: SizedBox(
-            // Fixed so the slot does not resize as the player types.
             width: 140,
             child: Center(
-              // **Scaled to fit, never clipped.** At 40 px a Darumadrop `0`
-              // advances about 27 px, so 140 px holds five or six digits while
-              // `AnswerDraft.maxLength` permits twelve. Clipping the overflow
-              // meant the answer shown and the answer graded could differ — and
-              // worse, backspacing a hidden character read as a keypress that
-              // did nothing.
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   _draft.text.isEmpty ? ' ' : _draft.text,
-                  // Named so a test can read the answer without matching a
-                  // keypad key that happens to show the same digit.
                   key: const ValueKey<String>('answer-draft'),
                   maxLines: 1,
                   textScaler: TextScaler.noScaling,
-                  // Half the prompt's 76: the answer is read, not solved, so it
-                  // sits below the challenge in the visual hierarchy.
                   style: BrandText.numeral(40),
                 ),
               ),

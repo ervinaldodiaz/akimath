@@ -93,10 +93,11 @@ void main() {
       ]);
     });
 
-    testWidgets('a different series draws a different ring',
+    testWidgets(
+        'a different series draws a different ring — the control, since a ring '
+        'built from correct and total rather than from the outcomes would draw '
+        'the same marks whatever the order',
         (WidgetTester tester) async {
-      // The control: a ring built from `correct` and `total` rather than from
-      // the outcomes would draw four greens and a coral whatever the order.
       await _pump(tester, correct: 1, total: 2, outcomes: <Verdict>[
         Verdict.wrong,
         Verdict.correct,
@@ -120,12 +121,11 @@ void main() {
       expect(find.byType(VerdictRing), findsNWidgets(2));
     });
 
-    testWidgets('with no outcomes at all the score is still stated',
+    testWidgets(
+        'with no outcomes at all the score is still stated in words, because '
+        'an empty row would read as a clean sheet — the ring is a richer way '
+        'of saying the score, never the only way it is said',
         (WidgetTester tester) async {
-      // **The unwired state, and it must not read as a clean sheet.** A caller
-      // that hands over no outcomes gets the count in words instead of an empty
-      // row — the ring is a richer way of saying the same thing, never the only
-      // way it is said.
       await _pump(tester, outcomes: const <Verdict>[]);
 
       expect(find.byType(VerdictRing), findsNothing);
@@ -134,11 +134,11 @@ void main() {
   });
 
   group('the two tiles', () {
-    testWidgets('the total time and the streak, and nothing else',
+    testWidgets(
+        'the total time and the streak and nothing else — the design draws '
+        'three and the third was the rating, and counting them is what stops '
+        'a fourth arriving unnoticed',
         (WidgetTester tester) async {
-      // The design draws three and the third was the rating — see the group
-      // below for why it went. Counting the tiles is what stops a fourth
-      // arriving unnoticed.
       await _pump(tester);
 
       expect(find.byType(StatTile), findsNWidgets(2));
@@ -150,29 +150,21 @@ void main() {
         (WidgetTester tester) async {
       await _pump(tester, elapsed: const Duration(milliseconds: 51400));
 
-      // Built with the same formatter: the assertion is about *which*
-      // duration reaches the tile, not about how a decimal is spelled.
       expect(
         _tile(tester, 'EN TOTAL'),
         EsMxNumber.seconds(51.4, places: 1),
+        reason: 'built with the same formatter, so the claim is about which '
+            'duration reaches the tile and not how a decimal is spelled',
       );
     });
   });
 
   group('nothing on it is a figure the product cannot produce', () {
-    testWidgets('the three blocks the design draws from nothing are absent',
+    testWidgets(
+        'the three blocks the design draws from nothing are absent, asserted '
+        'by widget type as well as by label so a meter cannot outlive its '
+        'heading',
         (WidgetTester tester) async {
-      // **Q3/D17 kept a rating off this screen until 2026-08-20**, on the rule
-      // that F2 shows no figure a later sync could contradict. A quarantined
-      // constant was drawn instead, which is a different thing from computing
-      // one and still the same thing to a player: on 2026-09-02 two
-      // structurally different series printed an identical `+ 12 RATING` and
-      // `Fracciones 68 % · Multiplicar 96 %` against the live API, neither
-      // having held a fraction or a multiplication.
-      //
-      // The mastery bars are asserted by widget type as well as by label: the
-      // heading could go while the meters stayed, and a bar with no eyebrow
-      // over it is the same invented figure without the word.
       await _pump(tester);
 
       expect(find.textContaining('RATING'), findsNothing);
@@ -181,23 +173,22 @@ void main() {
       expect(find.textContaining('QUÉ SIGUE'), findsNothing);
     });
 
-    testWidgets('and the two tiles left are the measured ones',
+    testWidgets(
+        'and the two tiles left are the measured ones — the other half, since '
+        'a screen drawing no tiles at all would satisfy the assertion above '
+        'and be a different defect',
         (WidgetTester tester) async {
-      // The other half. A screen that satisfied the assertion above by drawing
-      // no tiles at all would be a different defect, and this is what tells
-      // the two apart — the same pair `03 Acierto` and `04 Error` show.
       await _pump(tester, elapsed: const Duration(seconds: 47), streakDays: 3);
 
       expect(_tile(tester, 'EN TOTAL'), EsMxNumber.seconds(47, places: 1));
       expect(_tile(tester, 'RACHA'), '3');
     });
 
-    testWidgets('a clean series ends on the streak, with nothing under it',
+    testWidgets(
+        'a clean series ends on the streak with nothing under it — the '
+        'shortest the screen gets, pinning that removing the invented blocks '
+        'left no heading over nothing behind (DR-P2)',
         (WidgetTester tester) async {
-      // The shortest the screen gets: no slip, so no coral card either, and
-      // the two invented blocks used to be all that stood between the tiles
-      // and the button. A heading over nothing is what `4.1` refuses with
-      // `HISTORIAL` (DR-P2), and this pins that nothing was left behind.
       await _pump(tester, correct: 5, outcomes: const <Verdict>[
         Verdict.correct,
         Verdict.correct,
@@ -221,18 +212,19 @@ void main() {
       expect(find.text(_stumble.steps.single), findsOneWidget);
     });
 
-    testWidgets('it names the item, counting from one', (WidgetTester tester) async {
-      // The design's copy says *"en el cuarto reto"*, and the round knows
-      // which. A player reading advice about a mistake needs to know which of
-      // five it was about.
+    testWidgets(
+        'it names the item counting from one, because a player reading advice '
+        'about a mistake needs to know which of five it was about',
+        (WidgetTester tester) async {
       await _pump(tester, stumble: _stumble, stumbleIndex: 3);
 
       expect(find.text('Reto 4'), findsOneWidget);
     });
 
-    testWidgets('and is absent when nothing went wrong',
+    testWidgets(
+        'and is absent when nothing went wrong, because a heading over nothing '
+        'is what 4.1 refuses with HISTORIAL',
         (WidgetTester tester) async {
-      // No heading over nothing — the same reading `HISTORIAL` gets on `4.1`.
       await _pump(tester, correct: 5, outcomes: const <Verdict>[
         Verdict.correct,
         Verdict.correct,
@@ -244,10 +236,11 @@ void main() {
       expect(find.text('QUÉ SE TORCIÓ'), findsNothing);
     });
 
-    testWidgets('and absent when the pack declares no copy for the slip',
+    testWidgets(
+        'and absent when the pack declares no copy for the slip — the ring '
+        'still shows the slip, and only the explanation is missing because '
+        'there is none to give',
         (WidgetTester tester) async {
-      // A slip with no words is still a slip — the ring shows it. What is
-      // absent is the explanation, because there is none to give.
       await _pump(tester);
 
       expect(find.text('QUÉ SE TORCIÓ'), findsNothing);
@@ -266,12 +259,11 @@ void main() {
       expect(done, 1);
     });
 
-    testWidgets('and nothing offers a destination that does not exist',
+    testWidgets(
+        'and nothing offers a destination that does not exist — 2.5 draws a '
+        'second button, nothing reviews a past item, so it is absent rather '
+        'than dead',
         (WidgetTester tester) async {
-      // `2.5` draws a second button, `Ver el reto que falló`. Nothing reviews a
-      // past item, so drawing it would be a control that does nothing —
-      // absent rather than dead, the same rule the four missing settings rows
-      // follow.
       await _pump(tester, stumble: _stumble);
 
       expect(find.text('Ver el reto que falló'), findsNothing);
@@ -279,10 +271,11 @@ void main() {
   });
 
   group('it never scolds, at any score', () {
-    testWidgets('none of the four forbidden words, from 0 to 5',
+    testWidgets(
+        'none of the four forbidden words, from 0 to 5 — the same sweep '
+        'verdict_screen_test.dart runs, because req-diagnosis-copy is about '
+        'the product and not about one screen',
         (WidgetTester tester) async {
-      // The same sweep `verdict_screen_test.dart` runs. `req-diagnosis-copy`
-      // is about the whole product, not about one screen.
       for (int correct = 0; correct <= 5; correct++) {
         await _pump(tester, correct: correct, stumble: _stumble);
         final String all = _copy(tester).join(' ').toLowerCase();
@@ -304,8 +297,10 @@ void main() {
       expect(find.byType(Aki), findsOneWidget);
     });
 
-    testWidgets('the copy changes with the score', (WidgetTester tester) async {
-      // The control: one fixed sentence would pass every assertion above.
+    testWidgets(
+        'the copy changes with the score — the control, since one fixed '
+        'sentence would pass every assertion above',
+        (WidgetTester tester) async {
       await _pump(tester, correct: 5);
       final String perfect = _copy(tester).join(' ');
       await _pump(tester, correct: 0);
