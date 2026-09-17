@@ -23,6 +23,33 @@ const REAL_MISCONCEPTIONS = fileURLToPath(
 );
 const AUTHORED = AUTHORED_PACK_PATH;
 
+/**
+ * The runner, resolved from this package's own `node_modules` rather than
+ * through `npx`.
+ *
+ * `npx tsx` costs 2.99–5.48s per spawn against 1.49–2.07s for the binary it
+ * ends up running — measured on 2026-09-17 — and the difference is resolution,
+ * not work. It is also a second failure mode with nothing to do with this code:
+ * `npx` reaches for the shared npm lock and, with several worktrees running
+ * their suites at once, answers `ECOMPROMISED` and tries to install from the
+ * network. `npm run build:pack` resolves `tsx` from exactly this path, so this
+ * is also the closer imitation of the real command.
+ */
+const TSX = fileURLToPath(new URL("../../node_modules/.bin/tsx", import.meta.url));
+
+/**
+ * How long one of those spawns is allowed to take.
+ *
+ * Every case below compiles and runs a TypeScript entry point in a subprocess,
+ * which is seconds rather than the milliseconds the package's 5s default was
+ * written for. At load average 41 the spawns measured 0.7–4.2s and one case
+ * timed out; the failure named no assertion, so the gate was reporting machine
+ * load as a defect in the pack builder. This is the honest bound for what these
+ * cases actually do, and it is set per case so every non-spawning test in the
+ * package stays held to 5s.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
 interface Run {
   readonly status: number;
   readonly stderr: string;
@@ -31,11 +58,15 @@ interface Run {
 
 function run(args: readonly string[]): Run {
   try {
-    const stdout = execFileSync("npx", ["tsx", CLI, ...args], { encoding: "utf8" });
+    const stdout = execFileSync(TSX, [CLI, ...args], { encoding: "utf8" });
     return { status: 0, stdout, stderr: "" };
   } catch (error) {
-    const e = error as { status?: number; stdout?: string; stderr?: string };
-    return { status: e.status ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
+    const e = error as { status?: number | null; stdout?: string; stderr?: string };
+    // A process that never started, or one a signal killed, has no exit status.
+    // Reporting either as `1` would let a refusal case pass on a missing `tsx`
+    // instead of saying so (TEST-1).
+    if (typeof e.status !== "number") throw error;
+    return { status: e.status, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
   }
 }
 
@@ -63,7 +94,7 @@ describe("the builder writes a pack", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/80 items|70 items/);
     expect(JSON.parse(readFileSync(w.out, "utf8"))).toMatchObject({ pack_format_version: 1 });
-  });
+  }, SPAWN_TIMEOUT_MS);
 });
 
 /**
@@ -79,7 +110,7 @@ describe("a refusal writes nothing and damages nothing", () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/pack_salt/);
     expect(() => readFileSync(w.out, "utf8")).toThrow();
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("leaves a previously written pack exactly as it was", () => {
     const w = workspace(validDeclaration());
@@ -91,7 +122,7 @@ describe("a refusal writes nothing and damages nothing", () => {
 
     expect(r.status).toBe(1);
     expect(readFileSync(w.out, "utf8")).toBe(before);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("refuses a pack the frozen validator rejects, naming the tag", () => {
     const w = workspace(validDeclaration());
@@ -111,7 +142,7 @@ describe("a refusal writes nothing and damages nothing", () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/unknown_index_out_of_range/);
     expect(() => readFileSync(w.out, "utf8")).toThrow();
-  });
+  }, SPAWN_TIMEOUT_MS);
 });
 
 /**
@@ -133,7 +164,7 @@ describe("the committed pack is the one the declaration produces", () => {
 
     expect(r.status).toBe(0);
     expect(readFileSync(committed, "utf8")).toBe(before);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("keeps all six families, in the pack we actually ship", () => {
     const pack = JSON.parse(readFileSync(committed, "utf8")) as {
