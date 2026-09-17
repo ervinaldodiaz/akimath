@@ -11,8 +11,8 @@ export default defineConfig({
     // per case and took seconds. That file now carries its own explicit 30s per
     // spawning case, stated where the spawn is, precisely so this figure can
     // stay at 5s and keep every test that does not shell out honest. Raising it
-    // globally would have bought the same green run by exempting 340-odd cases
-    // that have no business taking five seconds.
+    // globally would have bought the same green run by exempting every test in
+    // the package that has no business taking five seconds.
     //
     // What it does and does not do, measured rather than assumed: a test that
     // awaits a promise nobody resolves fails here in ~2s, but a synchronous

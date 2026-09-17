@@ -558,7 +558,7 @@ the offline pack format and its OpenAPI half.
   shared npm lock, answers `ECOMPROMISED` and tries to install from the network. The suite spawns
   that binary directly now, which is also what `npm run build:pack` resolves. **And the five
   spawning cases carry an explicit 30s**, stated per case rather than as a global `testTimeout`,
-  so the ~340 cases that do not shell out stay honest at 5s. Measured after: 6/6 green at load 61,
+  so every test that does not shell out stays honest at 5s. Measured after: 6/6 green at load 61,
   the slowest case 1492ms and the file 4.64s, down from 21.81s with one case timed out at load 41.
   **Do not copy the old `run()` helper into a new test** — spawn the local binary and say what the
   case is allowed to take.
