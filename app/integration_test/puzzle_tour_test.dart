@@ -29,16 +29,22 @@ import 'support/launch.dart';
 /// want behind a condition it never checked. Each case establishes that state
 /// for itself: solving a board in the first one writes answered items and
 /// practised steps, and a shared `setUpAll` would hand them to the second.
+///
+/// **Nothing about the shipped content is written down here.** `puzzlesOfDay`
+/// rotates through seven boards per format, so a hardcoded solution is a test
+/// that passes one day in seven — which, in a suite nothing ran, would have
+/// read as flakiness rather than as a wrong assumption. The solution, the
+/// format list and the line totals are all read off the live widgets.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('the day\'s puzzle can be opened and solved',
-      (WidgetTester tester) async {
+  testWidgets('the day\'s puzzle can be opened and solved, its solution read '
+      'off the live board', (WidgetTester tester) async {
     await launchOnTheHome(tester);
 
-    // `ROMPECABEZAS` is the section heading; the cards are under it, one per
-    // puzzle the pack carries. Tapping the heading was tapping a `Text`.
-    expect(find.text('ROMPECABEZAS'), findsOneWidget);
+    expect(find.text('ROMPECABEZAS'), findsOneWidget,
+        reason: 'the section heading; the cards are under it, one per puzzle '
+            'the pack carries, and tapping the heading was tapping a Text');
     await tester.ensureVisible(find.text('KenKen'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KenKen'));
@@ -47,10 +53,6 @@ void main() {
     }
     expect(find.byType(PuzzleScreen), findsOneWidget);
 
-    // **Read off the live board, not written down here.** `puzzlesOfDay` rotates
-    // through seven boards per format, so a hardcoded solution is a test that
-    // passes one day in seven — which, in a suite nothing ran, would have looked
-    // like flakiness rather than a wrong assumption.
     final PuzzleBoard board =
         tester.widget<PuzzleScreen>(find.byType(PuzzleScreen)).puzzle.board;
     final List<List<int>> solution = board.solution;
@@ -62,10 +64,7 @@ void main() {
 
     for (int row = 0; row < size; row++) {
       for (int col = 0; col < size; col++) {
-        // A cell the board already supplies is not typeable, and tapping one
-        // then pressing a digit is how a filled board ends up rejected.
-        if (board.given.contains(Cell(row: row, col: col)) ||
-            board.blocked.contains(Cell(row: row, col: col))) {
+        if (!_isTypeable(board, Cell(row: row, col: col))) {
           continue;
         }
         await tester.tap(cells.at(row * size + col));
@@ -77,12 +76,12 @@ void main() {
     }
     await tester.pumpAndSettle();
 
-    // Solving ends the session and shows `¡Lo armaste!` — a screen that did
-    // not exist when this test was written, which is why it expected the home
-    // directly. Nothing ran it, so nothing said so.
     expect(find.byType(PuzzleScreen), findsNothing,
         reason: 'a solved board should end the session');
-    expect(find.text('¡Lo armaste!'), findsOneWidget);
+    expect(find.text('¡Lo armaste!'), findsOneWidget,
+        reason: 'solving ends the session on a screen that did not exist when '
+            'this case was written, which is why it expected the home '
+            'directly; nothing ran it, so nothing said so');
 
     await tester.tap(find.text('Seguir'));
     for (int i = 0; i < 20 && find.byType(HomeScreen).evaluate().isEmpty; i++) {
@@ -95,17 +94,17 @@ void main() {
       (WidgetTester tester) async {
     await launchOnTheHome(tester);
 
-    // **Read off the live home, not written down here.** The pack decides what
-    // it carries; a list in this file would be a second declaration of the
-    // shipped content and would pass while the pack lost a format.
     final List<String> names = tester
         .widget<HomeScreen>(find.byType(HomeScreen))
         .puzzles
         .map((PuzzleOption option) => option.label)
         .toList();
-    // PROC-10: a pack that lost its puzzles would make the loop below vacuous
-    // and the whole case would pass by walking nothing.
-    expect(names, isNotEmpty);
+    expect(
+      names,
+      isNotEmpty,
+      reason: 'PROC-10: a pack that lost its puzzles would make the loop below '
+          'vacuous and the whole case would pass by walking nothing',
+    );
     expect(names, hasLength(5), reason: 'the shipped pack carries five formats');
 
     for (final String name in names) {
@@ -118,19 +117,7 @@ void main() {
       expect(_onABoard(), isTrue, reason: '$name did not open');
       _expectItsConstraintsDrawn(tester, name);
 
-      // **Out through `Salir`, not `pageBack`.** A puzzle is pushed
-      // full-screen with no navigation affordance — that is the design — so
-      // there is no `CupertinoNavigationBarBackButton` for the harness to
-      // press. Both screens carry the same labelled control, which is the one
-      // route a player actually has.
-      // Matched on the `Semantics` widget rather than through
-      // `bySemanticsLabel`, which reads the compiled semantics tree and needs
-      // it switched on. The widget is there either way, and it is the thing
-      // the label is attached to.
-      await tester.tap(find.byWidgetPredicate(
-        (Widget w) => w is Semantics && w.properties.label == 'Salir',
-        description: 'the way out of a full-screen board',
-      ));
+      await tester.tap(_theWayOutOfABoard);
       for (int i = 0; i < 20 && find.byType(HomeScreen).evaluate().isEmpty; i++) {
         await tester.pumpAndSettle(const Duration(milliseconds: 300));
       }
@@ -138,6 +125,29 @@ void main() {
     }
   });
 }
+
+/// Whether [cell] is one the player can type into.
+///
+/// A cell the board already supplies is not typeable, and tapping one and then
+/// pressing a digit is how a filled board ends up rejected.
+bool _isTypeable(PuzzleBoard board, Cell cell) =>
+    !board.given.contains(cell) && !board.blocked.contains(cell);
+
+/// The control that leaves a full-screen board.
+///
+/// **Out through `Salir`, not `pageBack`.** A puzzle is pushed full-screen with
+/// no navigation affordance — that is the design — so there is no
+/// `CupertinoNavigationBarBackButton` for the harness to press. Both board
+/// screens carry the same labelled control, which is the one route a player
+/// actually has.
+///
+/// **Matched on the `Semantics` widget rather than through `bySemanticsLabel`**,
+/// which reads the compiled semantics tree and needs it switched on. The widget
+/// is there either way, and it is the thing the label is attached to.
+final Finder _theWayOutOfABoard = find.byWidgetPredicate(
+  (Widget w) => w is Semantics && w.properties.label == 'Salir',
+  description: 'the way out of a full-screen board',
+);
 
 /// The board is showing what its format asks of the player.
 ///
@@ -162,9 +172,12 @@ void main() {
 void _expectItsConstraintsDrawn(WidgetTester tester, String name) {
   final Finder screen = find.byType(PuzzleScreen);
   if (screen.evaluate().isEmpty) {
-    // The sopa de letras is letters and a word list; it has no board and asks
-    // nothing of one.
-    expect(find.byType(WordSearchScreen), findsOneWidget, reason: name);
+    expect(
+      find.byType(WordSearchScreen),
+      findsOneWidget,
+      reason: '$name: the sopa de letras is letters and a word list, so it has '
+          'no board and asks nothing of one',
+    );
     return;
   }
   final Finder board = find.byType(PuzzleBoardView);
@@ -196,11 +209,10 @@ void _expectItsConstraintsDrawn(WidgetTester tester, String name) {
           reason: '$name drew a cage in another format\'s outline');
     case KillerPuzzle():
       expect(cageOutlines, findsWidgets, reason: '$name drew no cage');
-      // The defect this tour could not see: a cage was drawn, so
-      // `findsWidgets` passed, and it was KenKen's `6 4` on all seven of the
-      // pack's Killer boards.
       expect(outlinesDrawn(), <CageOutline>{CageOutline.killer},
-          reason: '$name drew KenKen\'s dash');
+          reason: '$name drew KenKen\'s dash — the defect this tour could not '
+              'see, because a cage was drawn so findsWidgets passed, and it '
+              'was KenKen\'s 6 4 on all seven of the pack\'s Killer boards');
     case MagicSquarePuzzle(
         :final List<int> rowTargets,
         :final List<int> columnTargets,

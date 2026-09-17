@@ -224,6 +224,11 @@ const List<ScanRoot> geometryGateRoots = <ScanRoot>[
 /// chain, so a comparison assembled across two statements is invisible here —
 /// as is one whose left side is a call. And a `switch` on an enum never matches,
 /// which is intended: it is the remedy, not the defect.
+///
+/// **That shape of left operand is also what keeps generics out.** `<` and `>`
+/// are type arguments far more often than comparisons in Dart, so a looser
+/// pattern reports every `List<Widget>` and `Map<String, Color>` that happens
+/// to sit near a colour.
 final List<LiteralPattern> hueByComparisonPatterns = <LiteralPattern>[
   LiteralPattern(
     'a hue chosen by comparison',
@@ -313,6 +318,11 @@ const List<ScanRoot> storeFreeScreenRoots = <ScanRoot>[
   ScanRoot(prefix: 'features/puzzle/'),
 ];
 
+/// The two stores a screen must not hold, matched on identifier boundaries.
+///
+/// Whole names, because `DayLogStoreSpy` and `FakeDayLogStore` are test
+/// doubles rather than the thing being forbidden, and a substring match would
+/// report one.
 final List<LiteralPattern> storePatterns = <LiteralPattern>[
   LiteralPattern('DayLogStore', r'(?<![A-Za-z0-9_$])DayLogStore(?![A-Za-z0-9_$])'),
   LiteralPattern(

@@ -25,6 +25,11 @@ import 'support/device_state.dart';
 /// into `support/`, where the other five could reach it — and where the run a
 /// case wants is named at the top of the case rather than assembled from two
 /// local closures.
+///
+/// **The moment is handed in, never read.** The device's own hour is whatever
+/// it is, so each case builds the `now` it needs and passes it through the same
+/// seam the unit tests use — which is the reason `HomeRoute.now` is a
+/// parameter at all.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -34,8 +39,6 @@ void main() {
     final DateTime yesterday = DateTime(now.year, now.month, now.day - 1);
     await establish(DeviceState.playedRunEnding(yesterday, length: 13));
 
-    // The device's own hour is whatever it is, so the moment is handed in —
-    // the same seam the unit tests use, and the reason `now` is a parameter.
     final DateTime evening = DateTime(now.year, now.month, now.day, 20, 14);
 
     await tester.pumpWidget(
@@ -73,28 +76,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(StreakLostScreen), findsOneWidget);
 
-    // **The caption, against a real seeded log on a real device.** The run
-    // above ends three days before `now`, which is the only kind of log that
-    // reaches this screen: `broken` needs the log to hold neither today nor
-    // yesterday. `AYER` was drawn here for six days and was false every one of
-    // them (LANG-2). Asserted at this level and not only in the widget test
-    // because the day log is genuine here — seeded through the store the app
-    // really reads, not handed to a constructor.
     expect(find.text('ANTES'), findsOneWidget);
     expect(find.text('HOY'), findsOneWidget);
-    expect(find.text('AYER'), findsNothing);
+    expect(
+      find.text('AYER'),
+      findsNothing,
+      reason: 'the run above ends three days before now, which is the only '
+          'kind of log that reaches this screen — broken needs the log to hold '
+          'neither today nor yesterday. AYER was drawn here for six days and '
+          'was false every one of them (LANG-2). Asserted at this level and '
+          'not only in the widget test because the day log is genuine here, '
+          'seeded through the store the app really reads.',
+    );
     expect(find.text('13'), findsOneWidget);
 
-    // The record is on disk now. A relaunch — a fresh widget over the same
-    // preferences — must go straight to the home.
-    expect(await const PrefsStreakNoticeStore().lostShownOn(), isNotNull);
+    expect(
+      await const PrefsStreakNoticeStore().lostShownOn(),
+      isNotNull,
+      reason: 'the page turn has to reach disk, or the relaunch below proves '
+          'nothing',
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
-    expect(find.byType(StreakLostScreen), findsNothing);
+    expect(
+      find.byType(StreakLostScreen),
+      findsNothing,
+      reason: 'a relaunch — a fresh widget over the same preferences — must go '
+          'straight to the home, because the page turn happens once',
+    );
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 }

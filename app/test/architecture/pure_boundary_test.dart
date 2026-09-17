@@ -159,11 +159,15 @@ import 'dart:math'; // never package:flutter/material.dart
       }
     });
 
-    test('dart:async is forbidden, though it bans nothing useful', () {
-      // Design D-3: plan §2.2 lists `dart:async`, so it stays on the list, but
-      // `Future` and `Stream` come from `dart:core` — this entry keeps nothing
-      // out, and the body scan that would is a stated non-goal.
-      expect(leafVerdict('dart:async'), LeafVerdict.forbidden);
+    test('dart:async is forbidden, though dart:core already gives Future and '
+        'Stream', () {
+      expect(
+        leafVerdict('dart:async'),
+        LeafVerdict.forbidden,
+        reason: 'design D-3: plan §2.2 lists it, so it stays on the list, but '
+            'the entry keeps nothing out — and the body scan that would is a '
+            'stated non-goal',
+      );
     });
 
     test('an unlisted dart: library fails closed', () {
@@ -220,22 +224,16 @@ import 'dart:math'; // never package:flutter/material.dart
       );
     });
 
-    test('reports a root that is not on disk as absent, not as empty', () {
+    test('resolves each pure root it is asked about against the real tree', () {
       final SourceTree tree = SourceTree.readAppLib();
 
-      // All three roots are now on disk. The first two flipped from absent to
-      // present when `f2-core-loop` landed `features/round/policy/` and
-      // `content/model/` — which is the flip this test's earlier form
-      // predicted in its own reason string, and the moment the gate started
-      // covering them rather than reporting them missing.
       expect(tree.presentRoots, contains(PureRoot.designSpec));
       expect(tree.presentRoots, contains(PureRoot.featurePolicy));
       expect(tree.presentRoots, contains(PureRoot.contentModel));
     });
 
-    test('refuses a lib root that does not resolve', () {
-      // Without this the gate is silently vacuous: every root reports absent,
-      // nothing is scanned, and the suite is green.
+    test('refuses a lib root that does not resolve, or the gate is vacuous',
+        () {
       expect(
         () => SourceTree.readFrom(Directory('lib/nowhere')),
         throwsA(
@@ -280,8 +278,6 @@ import 'dart:math'; // never package:flutter/material.dart
     });
 
     test('a walk that follows only import reports zero on the same graph', () {
-      // tokens.dart holds three exports and no import, so the edge to
-      // brand_typography.dart is invisible to an import-only walk at any depth.
       expect(
         findBoundaryViolations(
           sources: graphWithPolicyImportingTheBarrel(),
@@ -289,6 +285,9 @@ import 'dart:math'; // never package:flutter/material.dart
           follow: const <DirectiveKind>{DirectiveKind.import},
         ),
         isEmpty,
+        reason: 'tokens.dart holds three exports and no import, so the edge to '
+            'brand_typography.dart is invisible to an import-only walk at any '
+            'depth — which is why the closure follows export and part',
       );
     });
 
@@ -332,8 +331,6 @@ import 'dart:math'; // never package:flutter/material.dart
   });
 
   group('feature barrel cycles', () {
-    // Both barrels exist only as map entries. Writing them to disk would be an
-    // intentionally broken build and an ordering edge into F2 (design D-1).
     test('two features importing each other are reported with the cycle', () {
       final List<List<String>> cycles =
           findFeatureBarrelCycles(const <String, String>{
@@ -349,9 +346,8 @@ import 'dart:math'; // never package:flutter/material.dart
       ]);
     });
 
-    test('a cycle closing through a non-barrel file is still reported', () {
-      // The plan's own trap: shell/ui/router.dart imports the feature barrels
-      // while a feature reaches back for a route id.
+    test('a cycle closing through a non-barrel file is still reported, which '
+        'is the plan\'s own trap', () {
       final List<List<String>> cycles =
           findFeatureBarrelCycles(const <String, String>{
         'features/shell/shell.dart': "export 'ui/router.dart';\n",
@@ -413,8 +409,6 @@ int millisecondOfNow() {
     });
 
     test('a line number survives a preceding block comment', () {
-      // The strip blanks comment text in place. A strip that deleted lines
-      // would cite the wrong one, and nothing else would notice.
       expect(
         scan('''
 /* the old shape
@@ -422,6 +416,8 @@ int millisecondOfNow() {
 final int roll = Random(7).nextInt(6);
 ''').single.line,
         3,
+        reason: 'the strip blanks comment text in place; one that deleted '
+            'lines would cite the wrong one, and nothing else would notice',
       );
     });
 

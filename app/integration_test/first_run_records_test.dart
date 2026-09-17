@@ -25,26 +25,17 @@ void main() {
 
   testWidgets('the probe reaches the record, and Perfil prints it',
       (WidgetTester tester) async {
-    // **Annihilate what this run writes** (TEST-2). `establish` clears the key
-    // on the way in; this puts back whatever the handset was holding, because a
-    // Tier 2 run has already overwritten a device's `akimath.day_log.v1`
-    // without capturing it once, and that is the rule the fourth A exists for.
-    final SharedPreferencesAsync preferences = SharedPreferencesAsync();
-    final String? before =
-        await preferences.getString(PrefsAnswerRecordStore.key);
-    addTearDown(
-      () => preferences.setString(PrefsAnswerRecordStore.key, before ?? ''),
-    );
+    await _restoreTheAnswerRecordAfterwards();
 
     await launchAndPlayTheProbe(tester, answers: 3);
 
-    // Read through the shipping store, on the shipping plugin.
     final List<AnsweredItem> record =
         await const PrefsAnswerRecordStore().read();
     expect(
       record,
       hasLength(3),
-      reason: 'three probe items were answered and the device kept ${record.length}',
+      reason: 'read through the shipping store on the shipping plugin: three '
+          'probe items were answered and the device kept ${record.length}',
     );
     final LocalStats stats = LocalStats.of(record);
     expect(stats.answered, 3);
@@ -59,7 +50,6 @@ void main() {
       reason: 'and a mean time, measured per item by 0.5',
     );
 
-    // Through `0.6` and `0.7` to the home, then to the profile.
     await tester.tap(find.text('Entrar a mi mapa'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Después'));
@@ -68,14 +58,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ProfileRoute), findsOneWidget);
-    // **The tile, not the number.** What the probe changed is that the figure
-    // has a source at all; `profileTiles` drops a tile whose figure is null, so
-    // the tile's presence is the claim and `LocalStats` above pins the value.
     expect(
       find.text('ACIERTOS'),
       findsOneWidget,
-      reason: 'Perfil counted the probe as RETOS and not as ACIERTOS',
+      reason: 'Perfil counted the probe as RETOS and not as ACIERTOS. The tile, '
+          'not the number: what the probe changed is that the figure has a '
+          'source at all, profileTiles drops a tile whose figure is null, and '
+          'LocalStats above pins the value.',
     );
     expect(find.text('PROMEDIO'), findsOneWidget);
   });
+}
+
+/// Captures the device's answer record and puts it back when the case ends.
+///
+/// **Annihilate what a run writes** (TEST-2). `establish` clears the key on the
+/// way in; this restores whatever the handset was holding, because a Tier 2 run
+/// has already overwritten a device's `akimath.day_log.v1` without capturing it
+/// once, and that is the rule the fourth A exists for.
+Future<void> _restoreTheAnswerRecordAfterwards() async {
+  final SharedPreferencesAsync preferences = SharedPreferencesAsync();
+  final String? before =
+      await preferences.getString(PrefsAnswerRecordStore.key);
+  addTearDown(
+    () => preferences.setString(PrefsAnswerRecordStore.key, before ?? ''),
+  );
 }

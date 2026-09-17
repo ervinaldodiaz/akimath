@@ -39,9 +39,12 @@ void main() {
     ..sort();
 
   test('it walked a real tree', () {
-    // PROC-10: a mistyped prefix scans nothing and reports nothing, which looks
-    // exactly like a clean feature.
-    expect(puzzleFiles, isNotEmpty);
+    expect(
+      puzzleFiles,
+      isNotEmpty,
+      reason: 'PROC-10: a mistyped prefix scans nothing and reports nothing, '
+          'which looks exactly like a clean feature.',
+    );
     // ignore: avoid_print
     print('  no puzzle generation · features/puzzle/ → '
         '${puzzleFiles.length} files');
@@ -53,8 +56,7 @@ void main() {
       final List<String> lines = tree.sources[path]!.split('\n');
       for (int i = 0; i < lines.length; i++) {
         final String line = lines[i];
-        // Prose is allowed to name the thing it forbids — this file does.
-        if (line.trimLeft().startsWith('//') || line.trimLeft().startsWith('///')) {
+        if (_isProse(line)) {
           continue;
         }
         for (final RegExp word in forbidden) {
@@ -69,8 +71,8 @@ void main() {
         reason: 'a board must arrive already solved and already unique');
   });
 
-  test('it sees a violation that is there', () {
-    // The control. Every assertion above passes for a scan that is broken.
+  test('it sees a violation that is there, which every assertion above would '
+      'pass without', () {
     const String probe = 'int solve(List<int> cells) => cells.first;';
     expect(
       forbidden.where((RegExp r) => r.hasMatch(probe)).toList(),
@@ -78,7 +80,6 @@ void main() {
       reason: 'the scan cannot see a solver it was pointed at',
     );
 
-    // And the false positive that shaped the rule above stays a non-match.
     const String innocent = 'final v = resolvePuzzleCell(kind);';
     expect(
       forbidden.where((RegExp r) => r.hasMatch(innocent)).toList(),
@@ -87,3 +88,13 @@ void main() {
     );
   });
 }
+
+/// Whether [line] is prose rather than code.
+///
+/// **Prose is allowed to name the thing it forbids, and this file is the
+/// proof**: every word on the forbidden list appears in the explanations above
+/// at least as often as it would in a solver. A scan that read comments would
+/// report its own reasoning, and a gate that cries wolf is a gate somebody
+/// deletes.
+bool _isProse(String line) =>
+    line.trimLeft().startsWith('//') || line.trimLeft().startsWith('///');

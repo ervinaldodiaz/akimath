@@ -42,9 +42,7 @@ class PuzzleScreen extends StatefulWidget {
       expect(scan('  final VoidCallback? onPractised;\n'), isEmpty);
     });
 
-    test('the name is matched whole', () {
-      // `DayLogStoreSpy` in a comment or a longer identifier is not the thing
-      // being forbidden, and a substring match would report one.
+    test('the name is matched whole, so a test double is not the thing', () {
       expect(scan('  final DayLogStoreSpy spy;\n'), isEmpty);
       expect(scan('  final FakeDayLogStore store;\n'), isEmpty);
     });

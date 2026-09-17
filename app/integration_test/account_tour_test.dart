@@ -7,6 +7,28 @@ import 'package:integration_test/integration_test.dart';
 
 import 'support/launch.dart';
 
+/// A date of birth that is an adult's and stays one.
+const String _anAdultsDate = '14031990';
+
+/// A date of birth that is a minor's and stays one until 2029.
+///
+/// **A date, not an age, and it has to stay a minor's.** This suite reads the
+/// real clock — `ProfileRoute` passes `DateTime.now()` into the flow — so a date
+/// pinned to the boundary is a minor for one run and an adult for the next.
+/// Born 19/08/2011: fifteen today, still `13_17` until 2029, and `13_17` is the
+/// band that reached this form and synced until ADR 0004. Ten years old would
+/// exercise the arm that was already closed.
+const String _aMinorsDate = '19082011';
+
+/// Types [ddmmyyyy] on the age gate's 3×4 pad.
+///
+/// Key by key, because the system keyboard never takes digits in this app.
+Future<void> _typeABirthDate(WidgetTester tester, String ddmmyyyy) async {
+  for (final String digit in ddmmyyyy.split('')) {
+    await pressKey(tester, digit);
+  }
+}
+
 /// The account door, on a real device, up to the last step that cannot be
 /// automated.
 ///
@@ -34,36 +56,33 @@ void main() {
     await tester.tap(find.text('Perfil'));
     await tester.pumpAndSettle();
 
-    // **The door, not a heading.** This read `expect(find.text('TU CUENTA'),
-    // findsOneWidget)` and no screen in `lib/` has ever drawn those words since
-    // `Perfil` absorbed `Avance` and the account section lost its eyebrow — so
-    // this case could not pass, and nothing said so because `flutter test` does
-    // not reach `integration_test/`. What the line was for is the claim that a
-    // device holding no session is offered a way to make an account, and the
-    // door below is that claim.
-    expect(find.text('Crear cuenta'), findsOneWidget);
+    expect(
+      find.text('Crear cuenta'),
+      findsOneWidget,
+      reason: 'the door, not a heading: a device holding no session is offered '
+          'a way to make an account. This read TU CUENTA until Perfil absorbed '
+          'Avance and the account section lost its eyebrow, after which no '
+          'screen in lib/ drew those words and the case could not pass.',
+    );
     await tester.tap(find.text('Crear cuenta'));
     await tester.pumpAndSettle();
 
-    // `req-age-gate`: the gate is what the door opens onto, not the form.
-    expect(find.text('¿CUÁNDO NACISTE?'), findsOneWidget);
+    expect(find.text('¿CUÁNDO NACISTE?'), findsOneWidget,
+        reason: 'req-age-gate: the gate is what the door opens onto, not the '
+            'form');
     expect(find.byKey(const Key('age-gate-date')), findsOneWidget);
 
-    // An adult's date, typed on the 3×4 pad — the system keyboard never takes
-    // digits in this app.
-    for (final String digit in '14031990'.split('')) {
-      await pressKey(tester, digit);
-    }
+    await _typeABirthDate(tester, _anAdultsDate);
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('create-account-email')), findsOneWidget);
     expect(find.byKey(const Key('create-account-password')), findsOneWidget);
-    // Q5: a player has no name, so the form has no field for one.
-    expect(find.textContaining('CÓMO TE LLAMO'), findsNothing);
-    // D13: no social buttons, and the provider's Google is on Neon's own
-    // consent screen besides.
-    expect(find.textContaining('Google'), findsNothing);
+    expect(find.textContaining('CÓMO TE LLAMO'), findsNothing,
+        reason: 'Q5: a player has no name, so the form has no field for one');
+    expect(find.textContaining('Google'), findsNothing,
+        reason: 'D13: no social buttons, and the provider\'s Google is on '
+            'Neon\'s own consent screen besides');
   }, skip: !Endpoints.configured);
 
   testWidgets('a minor is refused, and no path from there reaches the form',
@@ -75,27 +94,22 @@ void main() {
     await tester.tap(find.text('Crear cuenta'));
     await tester.pumpAndSettle();
 
-    // **A date, not an age, and it has to stay a minor's.** This suite reads
-    // the real clock — `ProfileRoute` passes `DateTime.now()` into the flow —
-    // so a date pinned to the boundary is a minor for one run and an adult for
-    // the next. Born 19/08/2011: fifteen today, still `13_17` until 2029, and
-    // `13_17` is the band that reached this form and synced until ADR 0004.
-    // Ten years old would exercise the arm that was already closed.
-    for (final String digit in '19082011'.split('')) {
-      await pressKey(tester, digit);
-    }
+    await _typeABirthDate(tester, _aMinorsDate);
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
     expect(find.byType(AdultsOnlyScreen), findsOneWidget);
     expect(find.byKey(const Key('create-account-email')), findsNothing);
 
-    // The one way on is out of the flow. The trail is cleared on the way in, so
-    // there is nothing behind the refusal to step back into.
     await tester.tap(find.text(adultsOnlyDoorLabel));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('create-account-email')), findsNothing);
-    expect(find.byType(AdultsOnlyScreen), findsNothing);
+    expect(
+      find.byType(AdultsOnlyScreen),
+      findsNothing,
+      reason: 'the one way on is out of the flow: the trail is cleared on the '
+          'way in, so there is nothing behind the refusal to step back into',
+    );
   }, skip: !Endpoints.configured);
 
   testWidgets('the form refuses a short password without leaving the device',
@@ -106,9 +120,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Crear cuenta'));
     await tester.pumpAndSettle();
-    for (final String digit in '14031990'.split('')) {
-      await pressKey(tester, digit);
-    }
+    await _typeABirthDate(tester, _anAdultsDate);
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
@@ -118,9 +130,13 @@ void main() {
     await tester.tap(find.text('Crear cuenta').last);
     await tester.pumpAndSettle();
 
-    // Still on the form, refused locally — `CredentialRules` runs before the
-    // request, so nothing reached the provider and no account was created.
-    expect(find.byKey(const Key('create-account-problem')), findsOneWidget);
-    expect(find.byKey(const Key('create-account-email')), findsOneWidget);
+    expect(
+      find.byKey(const Key('create-account-problem')),
+      findsOneWidget,
+      reason: 'refused locally: CredentialRules runs before the request, so '
+          'nothing reached the provider and no account was created',
+    );
+    expect(find.byKey(const Key('create-account-email')), findsOneWidget,
+        reason: 'and the form is still on screen');
   }, skip: !Endpoints.configured);
 }

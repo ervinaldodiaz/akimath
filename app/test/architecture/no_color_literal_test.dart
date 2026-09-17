@@ -64,9 +64,8 @@ const Color fill = Color(
       );
     });
 
-    test('BrandColors is not Material\'s palette', () {
-      // The whole gate turns on this. `Colors.` matched as a substring finds
-      // `BrandColors.` in every correct widget in the repository.
+    test('BrandColors is not Material\'s palette, and the gate turns on that',
+        () {
       expect(
         scan('''
 Container(color: BrandColors.ink, child: Text('x', style: BrandText.body()));
@@ -80,9 +79,6 @@ Container(color: BrandColors.ink, child: Text('x', style: BrandText.body()));
     });
 
     test('a brand hex printed as a label is not a colour literal', () {
-      // `character_sheet_screen.dart` prints four brand hexes as swatch labels.
-      // A gate that scanned for `#RRGGBB` would be red on day one against a
-      // screen whose entire job is to display them.
       expect(
         scan("const String label = 'CUERPO #F7DFB6';\n"),
         isEmpty,
@@ -153,10 +149,8 @@ Container(color: BrandColors.ink, child: Text('x', style: BrandText.body()));
       );
     });
 
-    test('the palette arm matches Material and nothing else', () {
-      // Asserted before the carve-out is applied: the four hits below are the
-      // carve-out exactly, so the pattern is proven by what it matched, never
-      // by what was subtracted afterwards (design D8).
+    test('the palette arm matches Material and nothing else, before the '
+        'carve-out is subtracted', () {
       final List<LiteralHit> hits = findLiterals(
         sources: SourceTree.readAppLib().sources,
         roots: const <ScanRoot>[colorGateRoot],

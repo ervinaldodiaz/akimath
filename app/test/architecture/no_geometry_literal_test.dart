@@ -71,11 +71,8 @@ const BoxShadow shadow = BoxShadow(
       );
     });
 
-    test('govern the math adapter too', () {
-      // `design/math/` is a widget surface, not artwork: it composes tokens the
-      // way `design/widgets/` does. Left out, the compositor would be the one
-      // painted layer BrandShape does not govern — the same silent gap D22
-      // named when a border moved into a painter.
+    test('govern the math adapter too, which composes tokens rather than art',
+        () {
       expect(
         selectFilesIn(geometryGateRoots, const <String>[
           'design/math/math_view.dart',
@@ -84,11 +81,7 @@ const BoxShadow shadow = BoxShadow(
       );
     });
 
-    test('exclude the figurate layout, and nothing else beside it', () {
-      // The one file out of `design/math/`, and the test that keeps the
-      // exclusion a file rather than a directory. Widening it to
-      // `design/math/spec/` would silently take the compositor's own spec half
-      // with it, which is the failure mode an exclusion invites.
+    test('exclude the figurate layout by file, and nothing else beside it', () {
       expect(
         selectFilesIn(geometryGateRoots, const <String>[
           'design/math/spec/figurate_layout.dart',
@@ -107,10 +100,8 @@ const BoxShadow shadow = BoxShadow(
       );
     });
 
-    test('follow the cage painter out of design/painting/', () {
-      // It moved to `design/puzzle/` so the generic painting layer would stop
-      // importing the puzzle layer. A gate whose root does not follow is a
-      // gate that quietly stopped covering a painted outline.
+    test('follow the cage painter out of design/painting/ into design/puzzle/',
+        () {
       expect(
         selectFilesIn(geometryGateRoots, const <String>[
           'design/puzzle/cage_edge_painter.dart',
@@ -128,13 +119,13 @@ const BoxShadow shadow = BoxShadow(
     });
 
     test('leave the artwork layer alone', () {
-      // aki_spec.dart holds 95 of these and every one of them is correct.
       expect(
         selectFilesIn(geometryGateRoots, const <String>[
           'design/brand/spec/aki_spec.dart',
           'design/brand/app_icon.dart',
         ]),
         isEmpty,
+        reason: 'aki_spec.dart holds 95 of these and every one is correct',
       );
     });
   });

@@ -55,10 +55,8 @@ void main() {
       );
     });
 
-    test('and a second reader of an issued pack', () {
-      // The half that keeps the module the only door: a route that parsed the
-      // server's pack itself could reach a playable `Pack` without ever passing
-      // the window question.
+    test('and a second reader of an issued pack, the module being the one door',
+        () {
       final List<LiteralHit> hits = scan(<String, String>{
         'features/home/ui/home_route.dart':
             '      final Pack pack = readIssuedPack(body, packId: id);\n',
@@ -67,10 +65,8 @@ void main() {
       expect(hits.single.text, 'readIssuedPack(');
     });
 
-    test('naming either in prose is not deciding anything', () {
-      // Both names appear in explanations of this rule at least as often as in
-      // code — this file is the proof — so a gate that read comments would
-      // report its own reasoning.
+    test('naming either in prose is not deciding anything, and this file is '
+        'the proof', () {
       expect(
         scan(<String, String>{
           'features/map/ui/map_route.dart': '''
@@ -94,9 +90,6 @@ void main() {
     });
 
     test('the two files that declare them are outside the root', () {
-      // `pack.dart` writes `bool isExpiredAt(DateTime now)` and
-      // `issued_pack.dart` writes `Pack readIssuedPack(`; a root that included
-      // them would name the definitions as violations.
       expect(
         scan(<String, String>{
           'content/model/pack.dart':
