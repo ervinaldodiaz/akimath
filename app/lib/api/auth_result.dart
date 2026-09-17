@@ -54,6 +54,9 @@ final class AuthSession {
   @override
   int get hashCode => cookie.hashCode;
 
+  /// **Never the cookie.** `toString` reaches logs, crash reports and the
+  /// debugger's watch pane, and a credential that appears in any of those has
+  /// left the device.
   @override
   String toString() => 'AuthSession(<redacted>)';
 }

@@ -47,6 +47,17 @@ Future<void> _json(HttpRequest request, int status, Object? body) async {
   request.response.write(json.encode(body));
 }
 
+/// A loopback address that is real and has nothing behind it.
+///
+/// Bound and immediately closed, so a connection to it is refused rather than
+/// left hanging on a port that may or may not be in use.
+Future<Uri> _aPortNothingListensOn() async {
+  final HttpServer dead = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  final Uri gone = Uri.parse('http://${dead.address.host}:${dead.port}/');
+  await dead.close(force: true);
+  return gone;
+}
+
 void main() {
   late _Server server;
   late ApiClient client;
@@ -94,9 +105,6 @@ void main() {
     });
 
     test('a blank token sends no header, so the refusal says what is true', () async {
-      // `Bearer ` is a header the server can only refuse, and it refuses it as
-      // `invalid_session` when the truth is `unauthenticated`. Sending nothing
-      // is what "I have no token" means on the wire.
       await serving((HttpRequest request) => _json(request, 401, <String, Object?>{
         'error': 'unauthenticated',
         'message': 'This operation needs a session.',
@@ -122,9 +130,6 @@ void main() {
     });
 
     test('a 401 carries the tag, so the two reasons stay distinguishable', () async {
-      // `unauthenticated` and `invalid_session` are different bugs — nothing
-      // sent versus something broken — and the server went to the trouble of
-      // separating them.
       await serving((HttpRequest request) => _json(request, 401, <String, Object?>{
         'error': 'invalid_session',
         'message': '"exp" claim timestamp check failed',
@@ -160,8 +165,6 @@ void main() {
 
   group('what a server can do wrong', () {
     test('a 200 whose body is not a profile is a failure, not a crash', () async {
-      // The case that would otherwise reach a screen as an exception from a
-      // constructor: a 200 the contract promises is a `Me` and is not one.
       await serving((HttpRequest request) => _json(request, 200, <String, Object?>{
         'playerId': _playerId,
       }));
@@ -181,8 +184,6 @@ void main() {
     });
 
     test('an error page in place of the frozen Error shape still reports', () async {
-      // A failing server is the one most likely to answer with HTML from
-      // something in front of it. Reading the tag must not throw.
       await serving((HttpRequest request) async {
         request.response.statusCode = 502;
         request.response.write('<html>bad gateway</html>');
@@ -196,20 +197,13 @@ void main() {
 
   group('when no answer arrives', () {
     test('a refused socket is unreachable, not an exception', () async {
-      // Bound and immediately closed, so the port is real and nothing listens.
-      final HttpServer dead = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      final Uri gone = Uri.parse('http://${dead.address.host}:${dead.port}/');
-      await dead.close(force: true);
-
-      final ApiClient orphan = ApiClient(baseUrl: gone);
+      final ApiClient orphan = ApiClient(baseUrl: await _aPortNothingListensOn());
       addTearDown(orphan.close);
 
       expect(await orphan.getMe(_token), isA<MeUnreachable>());
     });
 
     test('a server that never answers times out as unreachable', () async {
-      // The timeout is a constructor parameter precisely so this test does not
-      // take ten seconds.
       server = await _Server.answering((HttpRequest request) =>
           Future<void>.delayed(const Duration(seconds: 30)));
       client = ApiClient(
@@ -254,15 +248,11 @@ void main() {
 
       await client.fetchPack(accessToken: _token, packId: 'a/../b?x=1');
 
-      // The path is one segment, not three and a query.
       expect(server.requests.single.uri.path, '/packs/a%2F..%2Fb%3Fx%3D1');
       expect(server.requests.single.uri.query, isEmpty);
     });
 
     test('a 404 is the one answer that means issue a new one', () async {
-      // Gone, lapsed, or somebody else's — the server cannot tell those apart
-      // on purpose, because distinguishing them confirms a stranger's pack
-      // exists.
       await serving((HttpRequest request) => _json(request, 404, <String, Object?>{
             'error': 'not_found',
             'message': 'no such pack',
@@ -370,7 +360,7 @@ void main() {
     });
   });
 
-  group('POST /attempts over a real socket', () {
+  group('POST /attempts over a real socket, where success means the batch was recorded', () {
     List<AttemptSubmission> batch() => <AttemptSubmission>[
       AttemptSubmission.forPackItem(
         ref: const PackRef(packId: '018f4e3c-0000-7000-8000-0000000000d1', index: 0),
@@ -419,8 +409,6 @@ void main() {
     });
 
     test('a wrong answer is a success, not a failure', () async {
-      // Every verdict may be `ok: false` and the sync still worked. What the
-      // cases are about is whether the batch was *recorded*.
       await serving((HttpRequest request) => _json(request, 200, <String, Object?>{
         'verdicts': <Object?>[
           <String, Object?>{'itemId': _playerId, 'ok': false, 'payload': <String, Object?>{}},
@@ -468,8 +456,6 @@ void main() {
     });
 
     test('no answer at all is unreachable, and the batch is worth keeping', () async {
-      // The one case a retry is for. The server drops a duplicate by itself
-      // (migration 0004), so resending is safe.
       await serving((HttpRequest request) async {});
       await server.close();
 
@@ -535,8 +521,6 @@ void main() {
     });
 
     test('a 200 that is not a history is a failure, not a crash', () async {
-      // A server that broke the contract. It is not a history, so it cannot be
-      // `HistoryFound`, and it is not the caller's fault.
       await serving((HttpRequest request) => _json(request, 200, <String, Object?>{
         'entries': <Object?>[<String, Object?>{'kind': 'series'}],
       }));
@@ -584,9 +568,6 @@ void main() {
     });
 
     test('and it does not try to read a body that is not there', () async {
-      // A 204 carries none by definition. A client that parses one anyway turns
-      // a successful erasure into a `FormatException` the player sees as a
-      // failure — and then does not retry, because the row really is gone.
       await serving((HttpRequest request) async {
         request.response.statusCode = 204;
       });
@@ -671,9 +652,6 @@ void main() {
     });
 
     test('it posts the band and the key, and never the account', () async {
-      // The server takes the account from the token and refuses a body that
-      // mentions it. There is no parameter for one here, so there is nothing
-      // to send by mistake.
       await serving((HttpRequest request) => _json(request, 200, <String, Object?>{
         'playerId': _playerId,
         'ageBand': 'under_13',

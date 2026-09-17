@@ -12,10 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('a session is a value', () {
     test('two sessions holding the same cookie are the same session', () {
-      // **It has to be a value, because `LinkedSession` compares by value.**
-      // Without this the shell's `==` would compare two cookies by identity:
-      // equal for the canonicalised `const` a test writes, unequal for the
-      // one a real sign-in builds — green in the suite, wrong on a device.
       expect(
         AuthSession(String.fromCharCodes('s=abc'.codeUnits)),
         const AuthSession('s=abc'),
@@ -31,8 +27,6 @@ void main() {
     });
 
     test('the cookie is not in toString', () {
-      // `toString` reaches logs, crash reports and the debugger's watch pane.
-      // A credential that appears in any of those has left the device.
       expect(const AuthSession('s=abc').toString(), isNot(contains('abc')));
       expect(const AuthSession('s=abc').toString(), 'AuthSession(<redacted>)');
     });

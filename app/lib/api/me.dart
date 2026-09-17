@@ -63,6 +63,10 @@ class Me {
   final AgeBand ageBand;
   final DateTime createdAt;
 
+  /// The body this profile came from, written back.
+  ///
+  /// **The client never sends a `Me`.** This exists so a test can prove nothing
+  /// was lost on the way in, and for the day something caches one.
   Map<String, Object?> toJson() => <String, Object?>{
     'playerId': playerId,
     'ageBand': ageBand.wireName,

@@ -1,3 +1,11 @@
+/// `Me` off the wire, and the instant inside it.
+///
+/// **A band nobody declared is refused rather than defaulted.** Either default
+/// would state a band the device never sent, and which one is wrong is not a
+/// decision a parser gets to make — `AgeBand` carries the same rule from the
+/// production side.
+library;
+
 import 'package:akimath_app/api/me.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,6 +22,19 @@ Map<String, Object?> _json({
   'createdAt': createdAt,
 };
 
+/// Instants `DateTime.parse` reads happily and the frozen pattern refuses,
+/// each paired with what is wrong with it.
+///
+/// Every one of them round-trips to different bytes than it arrived as, which
+/// is how a client and a server stop agreeing about an instant.
+const List<(String, String)> _parseableButRefused = <(String, String)>[
+  ('2026-01-02T03:04:05.678+00:00', 'an offset, not Z'),
+  ('2026-01-02T03:04:05.678', 'no zone at all'),
+  ('2026-01-02 03:04:05.678Z', 'a space instead of T'),
+  ('2026-02-30T00:00:00.000Z', 'a day February never has'),
+  ('2025-02-29T00:00:00.000Z', 'not a leap year'),
+];
+
 void main() {
   group('a profile off the wire', () {
     test('reads the three fields the frozen schema requires', () {
@@ -26,18 +47,12 @@ void main() {
     });
 
     test('each band the contract names has a Dart value', () {
-      // The enum is the closed union `ErrorTag` was always meant to be: a
-      // `switch` over it is exhaustive, so a band added server-side is a
-      // compile error here rather than a silent `default`.
       expect(Me.fromJson(_json(ageBand: 'under_13')).ageBand, AgeBand.under13);
       expect(Me.fromJson(_json(ageBand: '13_17')).ageBand, AgeBand.thirteenToSeventeen);
       expect(Me.fromJson(_json(ageBand: 'adult')).ageBand, AgeBand.adult);
     });
 
     test('a band nobody decided is refused, not defaulted', () {
-      // Defaulting to `adult` would route a child out of their own protections;
-      // defaulting to `under_13` would be a lie about who is playing. Neither
-      // is a decision a parser gets to make.
       expect(() => Me.fromJson(_json(ageBand: '18_plus')), throwsFormatException);
     });
 
@@ -57,35 +72,23 @@ void main() {
   });
 
   group('createdAt is held to the contract, not to DateTime.parse', () {
-    // `DateTime.parse` accepts far more than the frozen pattern allows — no
-    // milliseconds, a `+00:00` offset, a local time with no zone at all. Every
-    // one of those round-trips to different bytes than it arrived as, which is
-    // how a client and a server stop agreeing about an instant.
-
-    test('accepts what the pattern accepts', () {
+    test('accepts what the pattern accepts, seconds and fraction both optional',
+        () {
       expect(Me.fromJson(_json(createdAt: '2026-01-02T03:04:05.678Z')).createdAt,
           DateTime.utc(2026, 1, 2, 3, 4, 5, 678));
-      // Seconds and the fractional part are both optional in the pattern.
       expect(Me.fromJson(_json(createdAt: '2026-01-02T03:04Z')).createdAt,
           DateTime.utc(2026, 1, 2, 3, 4));
     });
 
     test('refuses what the pattern refuses, however parseable it is', () {
-      for (final String off in <String>[
-        '2026-01-02T03:04:05.678+00:00', // an offset, not Z
-        '2026-01-02T03:04:05.678', // no zone at all
-        '2026-01-02 03:04:05.678Z', // a space instead of T
-        '2026-02-30T00:00:00.000Z', // a day February never has
-        '2025-02-29T00:00:00.000Z', // not a leap year
-      ]) {
+      for (final (String off, String why) in _parseableButRefused) {
         expect(() => Me.fromJson(_json(createdAt: off)), throwsFormatException,
-            reason: off);
+            reason: '$off — $why');
       }
     });
 
-    test('a leap day in a leap year is fine', () {
-      // The control. A pattern that refused every 29 February would satisfy the
-      // test above and would break one day in every 1461.
+    test('a leap day in a leap year is accepted, so the refusals are not blanket',
+        () {
       expect(Me.fromJson(_json(createdAt: '2028-02-29T00:00:00.000Z')).createdAt,
           DateTime.utc(2028, 2, 29));
     });
@@ -93,17 +96,12 @@ void main() {
 
   group('a profile survives the round trip', () {
     test('back to the bytes it arrived as', () {
-      // The client never sends a `Me`, so `toJson` exists for this test and for
-      // the day something caches one. Its value is that it proves nothing was
-      // lost on the way in.
       final Map<String, Object?> body = _json();
       expect(Me.fromJson(body).toJson(), body);
     });
 
-    test('including a time with no seconds, which normalises', () {
-      // The one case where the bytes legitimately change: the pattern allows
-      // `03:04Z`, and there is one canonical way to write that instant back.
-      // Named here so nobody reads the round trip above as universal.
+    test('a time with no seconds normalises, so the round trip is not universal',
+        () {
       expect(Me.fromJson(_json(createdAt: '2026-01-02T03:04Z')).toJson()['createdAt'],
           '2026-01-02T03:04:00.000Z');
     });

@@ -33,11 +33,6 @@ void main() {
     });
 
     test('a whole rating arrives as an int and is still a rating', () {
-      // `rating` and `deviation` are `type: number` in the frozen schema, and
-      // `real` in Postgres. `JSON.stringify(1200)` is `1200`, which Dart decodes
-      // as an `int` — a client reading `as double` would throw on a rating that
-      // happened to land on a whole number, which is a defect that hides until
-      // the one player whose rating is exactly 1200.
       final SkillStanding skill =
           SkillStanding.fromJson(_skill(rating: 1200, deviation: 350));
 
@@ -46,8 +41,6 @@ void main() {
     });
 
     test('a negative rating is read, because the schema sets no floor', () {
-      // Nothing in the contract bounds a rating, and a client refusing one the
-      // server is entitled to send would blank the screen over a number.
       expect(SkillStanding.fromJson(_skill(rating: -12.5)).rating, -12.5);
     });
 
@@ -74,9 +67,6 @@ void main() {
     });
 
     test('its instant is read by the one reader every model in api/ uses', () {
-      // `readInstant`, not `DateTime.parse` — the contract pins a literal `Z`,
-      // and the offsets `DateTime.parse` also takes round-trip to different
-      // bytes. R2: one rule, one implementation.
       expect(
         () => SkillStanding.fromJson(_skill(updatedAt: '2026-08-19T09:15:00.000+00:00')),
         throwsFormatException,
@@ -103,25 +93,18 @@ void main() {
     });
 
     test('a player nothing has rated is an empty list, and that is not an error', () {
-      // **The state of every player today**, because rating is F4 and nothing
-      // on the server writes `user_skills`. A client that read this as a
-      // failure, or drew a 0 from it, would be inventing the figure the empty
-      // list exists to withhold.
       final Standing standing = Standing.fromJson(_standing(skills: <Object?>[]));
 
       expect(standing.skills, isEmpty);
       expect(standing.isUnrated, isTrue);
     });
 
-    test('and a rated player is not unrated', () {
-      // The other half, so `isUnrated` cannot be satisfied by always answering
-      // true.
+    test('and a rated player is not unrated, so isUnrated cannot answer true '
+        'to everything', () {
       expect(Standing.fromJson(_standing()).isUnrated, isFalse);
     });
 
     test('the order the server chose is the order it keeps', () {
-      // The server orders by skill so two calls agree; re-sorting here would be
-      // a second opinion about it, and would diverge the day that order changes.
       final Standing standing = Standing.fromJson(
         _standing(skills: <Object?>[
           _skill(skillId: 4),
@@ -163,9 +146,8 @@ void main() {
       expect(Standing.fromJson(standing.toJson()), standing);
     });
 
-    test('two standings that differ are not equal', () {
-      // The control for the round trip above, which an `operator ==` returning
-      // a constant true would also satisfy (PROC-11).
+    test('two standings that differ are not equal, the control for the round '
+        'trip above', () {
       expect(
         Standing.fromJson(_standing()),
         isNot(Standing.fromJson(_standing(skills: <Object?>[]))),
@@ -181,8 +163,6 @@ void main() {
     });
 
     test('its toString does not carry a token or an account', () {
-      // Same reading as `LinkedSession.toString`: `toString` reaches logs and
-      // crash reports, so it says what a developer needs and nothing more.
       expect(Standing.fromJson(_standing()).toString(), contains('1 skill'));
     });
   });

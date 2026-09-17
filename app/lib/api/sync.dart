@@ -127,6 +127,9 @@ class AttemptSubmission {
   /// folded first would be a third implementation of the rule.
   final String answer;
 
+  /// When the item was answered. **UTC on the wire, whatever the device says.**
+  /// The contract pins `date-time` to a literal `Z`, and a local instant would
+  /// round-trip to different bytes than it arrived as.
   final DateTime at;
 
   /// Time on task, which is not the same as how long the request took. The

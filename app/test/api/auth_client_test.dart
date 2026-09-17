@@ -75,8 +75,6 @@ void main() {
 
   group('the paths are the provider\'s own', () {
     test('every call lands under the base path, not beside it', () async {
-      // `.../neondb/auth` + `token` must not resolve to `.../neondb/token`,
-      // which is what `Uri.resolve` does against a base with no trailing slash.
       await serving((HttpRequest request, String body) =>
           _reply(request, 200, <String, Object?>{'token': 'a.b.c'},
               cookies: <String>['session=abc; Path=/']));
@@ -113,8 +111,6 @@ void main() {
     });
 
     test('the code request names the type the provider validates against', () async {
-      // The provider answers `Invalid option: expected one of
-      // "email-verification"|"sign-in"|"forget-password"|"change-email"`.
       await serving((HttpRequest request, String body) => _reply(request, 200, <String, Object?>{}));
 
       await client.sendVerificationCode('a@b.co');
@@ -134,8 +130,6 @@ void main() {
 
   group('a session is a cookie, because the bearer plugin is off', () {
     test('verifying returns one, carrying every cookie the provider set', () async {
-      // The provider sends more than one `Set-Cookie`, and dropping the wrong
-      // one is a session that works until it does not.
       await serving((HttpRequest request, String body) => _reply(
         request,
         200,
@@ -169,8 +163,6 @@ void main() {
     });
 
     test('a success with no cookie is a failure, not an empty session', () async {
-      // Better to report it than to hand back a session that authenticates
-      // nothing and fails at the next call with an unrelated message.
       await serving((HttpRequest request, String body) =>
           _reply(request, 200, <String, Object?>{'status': true}));
 
@@ -179,8 +171,6 @@ void main() {
     });
 
     test('a session never prints itself', () async {
-      // These end up in log lines and error reports. A session cookie in one is
-      // a live credential in one.
       expect(const AuthSession('better-auth.session_token=abc123').toString(),
           isNot(contains('abc123')));
     });
@@ -204,7 +194,6 @@ void main() {
     });
 
     test('MISSING_ORIGIN arrives as a refusal, since it is our request that is wrong', () async {
-      // The real provider's answer to a sign-up with no absolute callbackURL.
       await serving((HttpRequest request, String body) => _reply(request, 400, <String, Object?>{
         'code': 'MISSING_ORIGIN',
         'message': 'Origin header is required when callbackURL is not an absolute URL',
@@ -217,8 +206,6 @@ void main() {
     });
 
     test('an unauthenticated token request is a refusal, not a crash', () async {
-      // `GET /token` with no session is exactly the 401 that revealed the
-      // endpoint exists.
       await serving((HttpRequest request, String body) => _reply(
           request, 401, <String, Object?>{'message': 'Unauthorized', 'code': 'UNAUTHORIZED'}));
 
