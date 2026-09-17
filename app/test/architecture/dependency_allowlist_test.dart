@@ -73,12 +73,23 @@ const Set<String> allowedRuntimeDependencies = <String>{
   'crypto',
 };
 
+/// Whether [line] opens a top-level key, which is what ends a block.
+///
+/// An unindented, non-empty, non-comment line is the only thing that closes
+/// `dependencies:` — which is what keeps `dev_dependencies:` out of the scan.
+bool _opensATopLevelKey(String line) =>
+    line.isNotEmpty && !line.startsWith(' ') && !line.startsWith('#');
+
 /// Reads the `dependencies:` block of `app/pubspec.yaml`.
 ///
 /// A hand parse rather than a YAML package, because adding a YAML package to
 /// read the dependency list would be its own punchline. The block is flat and
 /// two levels deep; anything more elaborate belongs in a real parser and would
 /// be a reason to revisit this.
+///
+/// **`dev_dependencies:` is out of scope, and deliberately.** They do not ship,
+/// so DEP-1 does not reach them; sweeping them in would make the gate fire on
+/// every test-tooling bump and get it disabled within a week.
 Set<String> _declaredRuntimeDependencies(String yaml) {
   final List<String> lines = yaml.split('\n');
   final Set<String> found = <String>{};
@@ -90,8 +101,7 @@ Set<String> _declaredRuntimeDependencies(String yaml) {
       continue;
     }
     if (inDependencies) {
-      // Any other top-level key ends the block.
-      if (line.isNotEmpty && !line.startsWith(' ') && !line.startsWith('#')) {
+      if (_opensATopLevelKey(line)) {
         break;
       }
       final RegExpMatch? match =
@@ -123,15 +133,19 @@ void main() {
       final String yaml = File('pubspec.yaml').readAsStringSync();
       final Set<String> declared = _declaredRuntimeDependencies(yaml);
 
-      // A parser one typo away from matching nothing passes forever.
-      expect(declared, isNotEmpty);
+      expect(
+        declared,
+        isNotEmpty,
+        reason: 'the parser matched no package. One typo in the block name '
+            'makes this gate permanently green, which is the one failure mode '
+            'it cannot have.',
+      );
       // ignore: avoid_print
       print('  dependency allowlist · runtime → ${declared.length} packages');
     });
 
-    test('an added dependency fails the build and names the package', () {
-      // The parser, exercised against a manifest that is not on disk — so the
-      // failure path is proven without editing the real one.
+    test('an added dependency is named, against a manifest that is not on disk',
+        () {
       const String withExtra = '''
 name: akimath_app
 
@@ -153,9 +167,7 @@ dev_dependencies:
       });
     });
 
-    test('dev dependencies are out of scope', () {
-      // They do not ship. Sweeping them in would make the gate fire on every
-      // test-tooling bump and get disabled within a week.
+    test('dev dependencies are out of scope, because they do not ship', () {
       const String yaml = '''
 dependencies:
   flutter:

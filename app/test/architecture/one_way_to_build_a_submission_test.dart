@@ -52,18 +52,14 @@ attempts: <AttemptSubmission>[
     });
 
     test('and a generative constructor made public again', () {
-      // The bare form matches nothing today, because the generative
-      // constructor is private. It is in the pattern list so that undoing that
-      // is caught here rather than only by the next release build.
       final List<LiteralHit> hits =
           scan(<String, String>{theOneMapping: '  AttemptSubmission(packRef: r);\n'});
 
       expect(hits.single.text, 'AttemptSubmission(');
     });
 
-    test('naming the type is not building one', () {
-      // Every adapter on this seam passes `List<AttemptSubmission>` around; a
-      // gate that reported a type annotation would report the whole feature.
+    test('naming the type is not building one, or the whole seam would report',
+        () {
       expect(
         scan(<String, String>{
           'features/sync/attempt_sync.dart': '''
@@ -96,9 +92,6 @@ Future<SyncResult> Function({required List<AttemptSubmission> attempts})? submit
     });
 
     test('the class that declares it is outside the root', () {
-      // `api/sync.dart` writes both constructor declarations, which match
-      // their own construction pattern. A root that included it would report
-      // the definition as a violation.
       expect(
         scan(<String, String>{
           'api/sync.dart': '  AttemptSubmission.forPackItem({required PackRef ref});\n',

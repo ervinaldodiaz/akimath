@@ -45,9 +45,8 @@ void main() {
       );
     });
 
-    test('allows a colour resolved from an enum', () {
-      // `MasteryLevel` resolution is legitimately a switch on a named level.
-      // A gate that forbade it would forbid the remedy it exists to encourage.
+    test('allows a colour resolved from an enum, which is the remedy itself',
+        () {
       expect(
         findLiterals(
           sources: <String, String>{
@@ -64,8 +63,6 @@ void main() {
     });
 
     test('allows a null check or an enum comparison picking a colour', () {
-      // `verdict == null ? focus : error` is not a hue by *measurement*. The
-      // rule is about thresholds, and equality is not a threshold.
       expect(
         findLiterals(
           sources: <String, String>{
@@ -81,8 +78,6 @@ void main() {
     });
 
     test('allows a generic type argument followed by a colour', () {
-      // `<` and `>` are generics far more often than comparisons, and a naive
-      // pattern reports every `List<Widget>` near a colour.
       expect(
         findLiterals(
           sources: <String, String>{

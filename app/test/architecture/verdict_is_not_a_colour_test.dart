@@ -39,21 +39,23 @@ String _codeOf(String source) => source
 
 void main() {
   group('the two verdicts differ in both channels', () {
-    test('a different outline and a different glyph', () {
-      // Two channels, so a widget that cannot spend one still has the other.
+    test('a different outline and a different glyph, so a widget that cannot '
+        'spend one channel still has the other', () {
       expect(Verdict.correct.outline, isNot(Verdict.wrong.outline));
       expect(Verdict.correct.glyph, isNot(Verdict.wrong.glyph));
     });
 
-    test('and the type hands out no colour at all', () {
-      // The construction, not the convention: there is nothing on `Verdict` to
-      // paint with, which is what makes hue-only unrepresentable *from a
-      // verdict*. Asserted by reading the source, because a getter that
-      // returned a `Color` would compile fine and nothing else would notice.
+    test('and the type hands out no colour at all, read off its source', () {
       final File spec = File('lib/design/widgets/spec/verdict.dart');
       expect(spec.existsSync(), isTrue, reason: spec.absolute.path);
 
-      expect(_codeOf(spec.readAsStringSync()), isNot(contains('Color')));
+      expect(
+        _codeOf(spec.readAsStringSync()),
+        isNot(contains('Color')),
+        reason: 'the construction, not the convention: there is nothing on '
+            'Verdict to paint with. Read off the source because a getter that '
+            'returned a Color would compile fine and nothing else would notice',
+      );
     });
   });
 
@@ -61,8 +63,13 @@ void main() {
     final Map<String, String> scanned = SourceTree.readAppLib().sources;
 
     test('the sweep read a real tree', () {
-      // PROC-10, and this file resolves its root from the working directory.
-      expect(scanned, isNotEmpty);
+      expect(
+        scanned,
+        isNotEmpty,
+        reason: 'PROC-10: this file resolves its root from the working '
+            'directory, and a root that resolved to nothing would sweep '
+            'nothing and pass',
+      );
       // ignore: avoid_print
       print('  verdict is not a colour · scanned ${scanned.length} file(s)');
     });
@@ -86,18 +93,27 @@ void main() {
       expect(offenders, isEmpty);
     });
 
-    test('and the sweep would catch one', () {
-      // The control. Both halves have to fire, or the rule passes for a file
-      // that only mentions a colour — which most of `design/` does.
+    test('and the sweep would catch one, both halves having to fire', () {
       const String planted = 'if (v == Verdict.wrong) paint(BrandColorRole.error.color);';
-      expect(_verdictValue.hasMatch(planted) && _verdictColour.hasMatch(planted), isTrue);
+      expect(
+        _verdictValue.hasMatch(planted) && _verdictColour.hasMatch(planted),
+        isTrue,
+      );
 
       const String innocent = 'paint(BrandColorRole.error.color);';
-      expect(_verdictValue.hasMatch(innocent) && _verdictColour.hasMatch(innocent), isFalse);
+      expect(
+        _verdictValue.hasMatch(innocent) && _verdictColour.hasMatch(innocent),
+        isFalse,
+        reason: 'one half alone passes for a file that only mentions a colour, '
+            'which most of design/ does',
+      );
 
-      // And the prose stripper does its job on this file's own explanation.
       const String prose = '/// pairing Verdict.correct with BrandColorRole.success is the bug';
-      expect(_codeOf(prose), isNot(contains('Verdict.correct')));
+      expect(
+        _codeOf(prose),
+        isNot(contains('Verdict.correct')),
+        reason: 'the stripper has to do its job on this file\'s own explanation',
+      );
     });
   });
 }
