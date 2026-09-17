@@ -3,7 +3,7 @@ import type { PuzzleRejectionTag } from "./rejection.js";
 
 /**
  * The solver that decides whether a board is playable. Trusting the author and
- * checking only cage coverage ships a puzzle a child cannot finish, offline,
+ * checking only cage coverage ships a puzzle a player cannot finish, offline,
  * with no way to report it — so the search is exhaustive (design.md D10).
  *
  * The 6×6 cap of plan §5.3 D15 bounds the board, not the search: a magic

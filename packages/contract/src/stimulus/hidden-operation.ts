@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { StimulusRejectionTag } from "./rejection.js";
 
 /**
- * The function machine: worked examples go in, the child infers the rule and
+ * The function machine: worked examples go in, the player infers the rule and
  * answers for `query_input`. Two examples is the floor because one fixes no
  * operation.
  */

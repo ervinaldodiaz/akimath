@@ -4,7 +4,7 @@
 /// the caller says which day — and it holds **days, never moments**.
 ///
 /// **That is a privacy decision, not a rounding convenience.** What time of day
-/// a child plays is not needed to count a streak, so it is not stored. The
+/// a player plays is not needed to count a streak, so it is not stored. The
 /// encoded form carries dates and nothing else, and a test asserts it contains
 /// no `:`.
 library;
@@ -16,7 +16,7 @@ class DayLog {
 
   /// How many days are kept.
   ///
-  /// A log kept forever is a year of a child's activity sitting on the device
+  /// A log kept forever is a year of a player's activity sitting on the device
   /// for a figure that only needs the current run — retention is a privacy
   /// question as much as a storage one. Ninety days is comfortably longer than
   /// any streak worth showing and short enough to be a bounded file.

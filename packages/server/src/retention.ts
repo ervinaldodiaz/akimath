@@ -20,7 +20,7 @@ export const RETENTION_DAYS = {
    *
    * **The same figure as `attempts`, and it has to be at least that.** Both
    * tables are referenced by `attempts` with `ON DELETE CASCADE`, so sweeping
-   * one early would take a child's answered history with it — the exact
+   * one early would take a player's answered history with it — the exact
    * opposite of what a retention job is for. Keyed on the *end* of the window,
    * so a pack outlives every attempt that could reference it by construction,
    * and the job checks that there are none left anyway.
@@ -49,7 +49,7 @@ export interface RetentionCutoffs {
  * walk back over 400 local midnights. A local calendar day is 23, 24 or 25
  * hours long, and the Dart side already paid for the other reading: the streak
  * policy walked backwards with a `Duration` over local midnights and lost a
- * child's whole 30-day run across a Tijuana daylight-saving transition. Here
+ * player's whole 30-day run across a Tijuana daylight-saving transition. Here
  * the calendar reading would be the bug — a retention policy is about how long
  * data has existed, not about which day it is where the server happens to be.
  */

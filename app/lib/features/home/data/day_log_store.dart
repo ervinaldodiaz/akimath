@@ -5,10 +5,11 @@ import '../policy/day_log.dart';
 /// **A seam, and today only the in-memory side of it exists.** Persisting on a
 /// phone means writing to the app's documents directory, and Flutter exposes no
 /// path to it without a plugin — `path_provider` or `shared_preferences`. Adding
-/// either is a **DEP-1 decision**: the audience includes children under 13, so
-/// every dependency is checked for whether it phones home *before* it is
-/// proposed, and `dependency_allowlist_test` fails loudly on any addition
-/// precisely so a human takes that call rather than a session.
+/// either is a **DEP-1 decision**: every dependency is checked for whether it
+/// phones home *before* it is proposed — data minimisation under the LFPDPPP
+/// applies to adults too (ADR 0004's amendment §2) — and
+/// `dependency_allowlist_test` fails loudly on any addition precisely so a
+/// human takes that call rather than a session.
 ///
 /// So this change ships the model, the seam and the wiring, all tested, and the
 /// persistent implementation is one file behind a decision that is not a

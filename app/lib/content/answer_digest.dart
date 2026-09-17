@@ -7,7 +7,7 @@
 /// the exception it would take to move it.
 ///
 /// **A pack the server issued states a digest, never the answer**, so the
-/// server never learns an authored answer and a child's device can still tell
+/// server never learns an authored answer and a player's device can still tell
 /// right from wrong with no network. The message construction is a cross-stack
 /// contract, frozen in `packages/contract/src/digest.ts` and pinned by
 /// `contract/fixtures/digest.golden.json`, which this is tested against:

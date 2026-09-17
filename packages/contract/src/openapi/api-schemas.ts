@@ -19,7 +19,7 @@ import { KEYPAD_LAYOUTS } from "../keypad-layout.js";
  *   the problem; `ARCHITECTURE.md` §4 is explicit that they never travel and
  *   that the client answers with the item id alone.
  * - No `options` on the item response. `ARCHITECTURE.md`:202 still lists it and
- *   §4's own resolution contradicts it — a field offering a child a set of
+ *   §4's own resolution contradicts it — a field offering a player a set of
  *   answers to pick from is a different product. That line is corrected in this
  *   change.
  * - No correctness field on the submission. §4: the sync endpoint "does not

@@ -14,7 +14,7 @@ class AnswerDraft {
 
   static const AnswerDraft empty = AnswerDraft('');
 
-  /// Long enough for anything the corpus asks for, short enough that a child
+  /// Long enough for anything the corpus asks for, short enough that a player
   /// holding a key cannot overflow the slot the overflow gate protects.
   static const int maxLength = 12;
 
@@ -33,7 +33,7 @@ class AnswerDraft {
   /// frozen answer shape — `-?digits` optionally over `digits` — admits
   /// neither. Before this check, one tap on either key produced a draft that
   /// `grade` could only ever score **wrong**: two keys of sixteen that punished
-  /// a child for the app's own gap, with `canSubmit` returning true for a draft
+  /// a player for the app's own gap, with `canSubmit` returning true for a draft
   /// of nothing but `,`.
   ///
   /// Refusing them here is the safe half of the fix. The other half is a

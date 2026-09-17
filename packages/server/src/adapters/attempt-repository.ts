@@ -64,7 +64,7 @@ export async function refForIssuedItem(
  * **An expired pack still grades.** `expires_at` governs whether a device may
  * keep *playing* a pack, and a phone that was offline for a fortnight is
  * carrying attempts that were legitimately earned. Refusing them here would
- * throw away a child's week because their sync was late.
+ * throw away a player's week because their sync was late.
  *
  * The index is read in SQL rather than by pulling the whole manifest across:
  * a fifty-item pack is one jsonb value, and a batch of fifty attempts against

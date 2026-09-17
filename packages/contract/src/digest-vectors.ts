@@ -33,7 +33,7 @@ export const DIGEST_GOLDEN_SALT =
  *
  * Every one is put through `requireStoredCanonical` first, because that is the
  * only way pack content reaches a digest — two spellings of one answer would
- * otherwise produce two digests and a child would be marked wrong for a
+ * otherwise produce two digests and a player would be marked wrong for a
  * keystroke.
  *
  * The set spans what a pack actually stores: whole numbers, a zero, both signs,

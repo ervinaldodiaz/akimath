@@ -59,7 +59,7 @@ describe("a cutoff is absolute elapsed time, not a walk over local midnights", (
   it("400 days spanning a daylight-saving transition is still 400 x 24 h", () => {
     // **The Dart side already paid for the other reading.** `StreakPolicy`
     // walked back with `subtract(Duration(days: 1))` over local midnights and
-    // lost a child's whole 30-day streak across a Tijuana transition. Here the
+    // lost a player's whole 30-day streak across a Tijuana transition. Here the
     // calendar reading would be the bug: retention is a policy about elapsed
     // time, and 400 days must not become 399 or 401 because a clock moved.
     //
@@ -422,7 +422,7 @@ describeWithDatabase("the job, against a real database", () => {
   it("the aggregates calibration reads are untouched by either run", async () => {
     // Deleting attempts is only safe because `template_stats` is maintained on
     // write. If a future path starts deriving from raw rows, this breaks a test
-    // rather than a child's history.
+    // rather than a player's history.
     await aged("018f4e3c-0000-7000-8000-000000000104", 401);
     const before = await db.client.query("SELECT * FROM template_stats");
 

@@ -15,7 +15,7 @@ library;
 /// The number of consecutive calendar days ending at [today] or yesterday.
 ///
 /// **Yesterday counts, and that is deliberate.** A streak that reset at
-/// midnight would tell a child who opens the app before playing that they had
+/// midnight would tell a player who opens the app before playing that they had
 /// lost it. The day is not over until it is over.
 ///
 /// **A wrong answer never decrements it** (Q7, decided 2026-08-15). This policy
@@ -103,7 +103,7 @@ List<bool> weekMarks({
 /// midnights, so the lookup simply misses.
 ///
 /// That was not hypothetical. In `America/Tijuana` — Tijuana, not a travelling
-/// device — a child with a 30-day run opening the app on the morning of
+/// device — a player with a 30-day run opening the app on the morning of
 /// 9 March 2026 saw a streak of **0** on the home, then **29** on the verdict
 /// screen after answering: two screens, one morning, neither number right. It
 /// also reached `America/Ciudad_Juarez`, `America/Havana`, `America/Santiago`
