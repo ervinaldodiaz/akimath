@@ -155,11 +155,36 @@ The one structural pattern the repo already commits to, on both sides of the sta
 
 ## CMT — Comments & documentation
 
-- **CMT-1** MUST: before writing a comment inside a function body, extract the code it would explain
-  into a function whose name says what the comment would have said. A comment that survives that
-  test states the non-obvious **why** in one or two lines and never restates the code; three lines
-  inside a body is the ceiling, and longer rationale belongs in the plan, `ARCHITECTURE.md`, or an
-  ADR under `docs/adr/`.
+- **CMT-1** MUST: **no comment inside a function body.** Extract the code it would explain into a
+  function whose name says what the comment would have said. The non-obvious **why** goes on the
+  symbol's doc comment — `///` in Dart, `/** */` in TypeScript — and longer rationale belongs in the
+  plan, `ARCHITECTURE.md`, or an ADR under `docs/adr/`.
+
+  **Amended 2026-09-16, and the escape hatch it closes was the whole rule.** This clause used to
+  allow a body comment that survived the extraction test, capped at three lines. The cap is gone
+  and the allowance with it: a body comment has no home now, because the reason a body comment
+  exists is almost always that a function is doing two things and one of them has no name.
+
+  The argument is not Martin's *"every comment is a failure"* — this book does not hold that, and
+  `clean-coder` still carries Ousterhout's rebuttal for the doc comment. The argument is this
+  section's own history. **CMT-2, CMT-2a, CMT-3, CMT-4 and CMT-5 are five rules and every one of
+  them was written after a comment lied** — the first-run flag that claimed answering was the only
+  path, the *"first run does not record"* sentence that went stale when the first run grew four
+  screens, the gate that did not exist, the three `storedAnswer` implementations behind a comment
+  saying there was one, and the kill switch one reader bypassed. Five incidents, one failure mode.
+  A sentence inside a body is the least visible, least reviewed and least greppable place that
+  failure can happen, and deleting the surface is cheaper than five more rules policing it.
+
+  **What this does not license.** A doc comment is still where rationale lives, and CMT-2 through
+  CMT-5 now bear on it entirely — they got narrower in scope and heavier in weight. Deleting a body
+  comment that carried a *decision* without moving that decision somewhere a reader will find it is
+  not compliance with this rule; it is the loss the rule is trying to avoid. Move it to the symbol,
+  or to `docs/`, or make it a gate (PROC-10). The comments that go without ceremony are the ones
+  that restate the line beneath them.
+
+  **Tool directives are not comments for this purpose.** `// ignore: avoid_print`,
+  `// eslint-disable-next-line`, `@ts-expect-error` and their kind are instructions to a tool that
+  happen to use comment syntax; they stay, and the rule they suppress is the thing to argue with.
 
 - **CMT-2** MUST: **a comment that states behaviour the code does not have is a defect**, and it is
   fixed with the code in the same commit — a comment is not a softer artifact than the code above
