@@ -53,6 +53,12 @@ class _WordSearchScreenState extends State<WordSearchScreen> {
   List<Cell> _trace = <Cell>[];
   bool _reported = false;
   bool _practised = false;
+
+  /// Whether `Hoja de referencia` is drawn over the grid.
+  ///
+  /// The word list goes with the grid: the card covers the grid, and the list
+  /// is about the grid — leaving it under an open sheet reads as two screens
+  /// stacked rather than one thing consulted.
   bool _rulesOpen = false;
 
   int get _columns => widget.puzzle.grid.first.length;
@@ -64,6 +70,11 @@ class _WordSearchScreenState extends State<WordSearchScreen> {
     setState(() => _trace = <Cell>[..._trace, cell]);
   }
 
+  /// Resolves whatever the trace spells, and clears it.
+  ///
+  /// Wired to `onPanCancel` as well as `onPanEnd`: a pan that never moved is
+  /// cancelled rather than ended, and a trace left standing would join the next
+  /// one into a line that spells something neither of them did.
   void _release() {
     final WordSearchProgress next = _progress.claim(_trace);
     final bool claimed = next.found.length > _progress.found.length;
@@ -105,9 +116,6 @@ class _WordSearchScreenState extends State<WordSearchScreen> {
                     : Center(child: _grid()),
               ),
               const SizedBox(height: BrandShape.space3),
-              // The card covers the grid, and the list of words is about the
-              // grid — leaving it under an open sheet reads as two screens
-              // stacked rather than one thing consulted.
               if (!_rulesOpen) _wordList(),
             ],
           ),
@@ -178,9 +186,6 @@ class _WordSearchScreenState extends State<WordSearchScreen> {
             onPanStart: (DragStartDetails d) => reach(d.localPosition),
             onPanUpdate: (DragUpdateDetails d) => reach(d.localPosition),
             onPanEnd: (_) => _release(),
-            // A pan that never moved is cancelled rather than ended, and a
-            // trace left standing would join the next one into a line that
-            // spells something neither of them did.
             onPanCancel: _release,
             child: Column(
               children: <Widget>[
@@ -201,13 +206,15 @@ class _WordSearchScreenState extends State<WordSearchScreen> {
     );
   }
 
+  /// One letter, lit while the trace is over it.
+  ///
+  /// The neutral highlight, the same yellow the stimulus hole uses for "this is
+  /// the thing you are working on".
   Widget _letter(Cell cell) {
     final bool tracing = _trace.contains(cell);
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          // The neutral highlight, the same yellow the stimulus hole uses for
-          // "this is the thing you are working on".
           color: tracing ? BrandColors.yellow : BrandColors.surface,
           border: Border.all(
             color: BrandColors.muted,

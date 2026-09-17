@@ -1,3 +1,16 @@
+/// `Pausa` on screen: the board covered, and only what it can keep promised.
+///
+/// **It shows nothing that reads as a clock** — the rule
+/// `quiet_while_you_solve_test.dart` enforces over every solving surface,
+/// asserted here too because this is the screen that was asked for *with* an
+/// elapsed time on it.
+///
+/// **And the way out is not *Guardar y salir*.** The design's label promises a
+/// board that comes back, and nothing here writes one to disk: a half-finished
+/// board lives in memory for as long as the screen does, so a button claiming
+/// to save is the one thing this screen must not draw (LANG-2).
+library;
+
 import 'package:akimath_app/design/brand/aki.dart';
 import 'package:akimath_app/design/theme.dart';
 import 'package:akimath_app/features/puzzle/policy/pause.dart';
@@ -58,9 +71,6 @@ void main() {
     });
 
     testWidgets('shows nothing that reads as a clock', (WidgetTester tester) async {
-      // The same rule `quiet_while_you_solve_test` enforces over every solving
-      // surface, asserted here too because this screen is the one that was
-      // asked for *with* an elapsed time on it.
       await _pump(tester);
 
       final RegExp clock =
@@ -95,10 +105,6 @@ void main() {
 
     testWidgets('and leaves it, saying what leaving costs',
         (WidgetTester tester) async {
-      // **Not "Guardar y salir".** The design's label promises a board that
-      // comes back, and nothing here writes one to disk — a half-finished board
-      // lives in memory for as long as the screen does. A button claiming to
-      // save is the one thing this screen must not do.
       int left = 0;
       await _pump(tester, onLeave: () => left++);
 

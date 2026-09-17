@@ -42,21 +42,24 @@ class PuzzleBoardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Only the formats with totals to show make room for them, so a magic
-    // square and a KenKen draw the same grid at the same size and only one has
-    // labels beside it.
-    if (!constraints.hasLineTargets) {
-      return _grid();
-    }
-    // The margin is space *around* an unchanged square: `cellRect` is untouched
-    // and the grid keeps the size it would have had.
+    return constraints.hasLineTargets ? _gridInsideItsMargins() : _grid();
+  }
+
+  /// The grid with a line of targets down its right and along its bottom.
+  ///
+  /// **Only the formats with totals to show make room for them**, so a magic
+  /// square and a KenKen draw the same grid at the same size and only one has
+  /// labels beside it. The margin is space *around* an unchanged square:
+  /// `cellRect` is untouched and the grid keeps the size it would have had.
+  ///
+  /// **`IntrinsicHeight`**, so the row-target column has a height to divide.
+  /// Without it the margin's `Expanded`s are handed unbounded height — the
+  /// grid's height comes from its own aspect ratio, which the row does not know
+  /// until it has laid the grid out.
+  Widget _gridInsideItsMargins() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        // **`IntrinsicHeight`**, so the row-target column has a height to divide.
-        // Without it the margin's `Expanded`s are handed unbounded height — the
-        // grid's height comes from its own aspect ratio, which the row does not
-        // know until it has laid the grid out.
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -111,30 +114,34 @@ class PuzzleBoardView extends StatelessWidget {
       aspectRatio: 1,
       child: CandySurface(
         borderRadius: BrandShape.radiusCardMedium,
-        // **Inset, because a square grid does not fit a rounded rectangle.**
-        // Flush to the frame, each corner arc cut across the outermost cells:
-        // a curved ink line crossing straight pink dashes, and a cage that
-        // appeared to run off the board. A 26 px radius intrudes about
-        // `26 × (1 − 1/√2)` ≈ 8 px on the diagonal, so `space2` is the smallest
-        // inset that clears it — and the gap it leaves is what makes the frame
-        // read as the object holding the grid rather than as its outermost
-        // line.
-        padding: const EdgeInsets.all(BrandShape.space2),
+        padding: const EdgeInsets.all(_insetClearingTheCornerArc),
         clip: true,
         child: _cells(),
       ),
     );
   }
 
+  /// How far the grid stands back from the frame around it.
+  ///
+  /// **A square grid does not fit a rounded rectangle.** Flush to the frame,
+  /// each corner arc cut across the outermost cells: a curved ink line crossing
+  /// straight pink dashes, and a cage that appeared to run off the board. A
+  /// 26 px radius intrudes about `26 × (1 − 1/√2)` ≈ 8 px on the diagonal, so
+  /// `space2` is the smallest inset that clears it — and the gap it leaves is
+  /// what makes the frame read as the object holding the grid rather than as
+  /// its outermost line.
+  static const double _insetClearingTheCornerArc = BrandShape.space2;
+
+  /// The cells, on a square sized by the narrower axis of whatever this is
+  /// given — the same rule `cellRect` follows, so the two cannot disagree about
+  /// how big a cell is.
+  ///
+  /// The builder's box is named `available` rather than `constraints`: this
+  /// widget's own [constraints] are the format's, and a `BoxConstraints` called
+  /// the same thing shadows them, which is what the analyzer said the first
+  /// time this was written.
   Widget _cells() {
-    // Square, and sized by the narrower axis of whatever it is given — the same
-    // rule `cellRect` follows, so the two cannot disagree about how big a cell
-    // is.
     return LayoutBuilder(
-      // **`available`, not `constraints`.** The board's own constraints are
-      // the format's, and a `BoxConstraints` called the same thing shadows
-      // them — which is what the analyzer said the first time this was
-      // written.
       builder: (BuildContext context, BoxConstraints available) {
           final double side = available.biggest.shortestSide;
           final Rect box = Rect.fromLTWH(0, 0, side, side);
@@ -183,6 +190,12 @@ class PuzzleBoardView extends StatelessWidget {
     return (across: across, down: down);
   }
 
+  /// One cell, placed where `cellRect` puts it.
+  ///
+  /// **The outline arrives rather than being chosen here.** Naming a `DashSpec`
+  /// on this line is what made a Killer board draw the KenKen dash: the widget
+  /// serves five formats and had no way to know which one it was drawing.
+  /// `BoardConstraints.cages` hands the cages and their outline down together.
   Widget _positioned(Rect box, int row, int col, Map<Cell, Cage> cageOf) {
     final Cell cell = Cell(row: row, col: col);
     final Rect rect =
@@ -198,13 +211,7 @@ class PuzzleBoardView extends StatelessWidget {
         cell: cell,
         entry: entry,
         edges: cage == null ? null : _edgesFor(cage, cell),
-        // **It arrives rather than being chosen here.** Naming a `DashSpec` on
-        // this line is what made a Killer board draw the KenKen dash: the
-        // widget serves five formats and had no way to know which one it was
-        // drawing. `BoardConstraints.cages` hands the two down together.
         outline: constraints.outline,
-        // Only the cage's anchor carries the target, so a five-cell cage shows
-        // its sum once rather than five times.
         target: cage != null && _isAnchor(cage, cell) ? _label(cage) : null,
         clues: _cluesAt(cell),
         onTap: () => onTapCell(cell),
@@ -237,6 +244,10 @@ class PuzzleBoardView extends StatelessWidget {
     return null;
   }
 
+  /// Whether this is the cell a cage hangs its target on.
+  ///
+  /// Only the anchor carries it, so a five-cell cage shows its sum once rather
+  /// than five times.
   bool _isAnchor(Cage cage, Cell cell) {
     final GridCell anchor = cageLabelAnchor(<GridCell>{
       for (final Cell c in cage.cells) GridCell(c.row, c.col),
@@ -267,6 +278,9 @@ class _Cell extends StatelessWidget {
   final String? target;
 
   /// The run sums this cell begins, along and down.
+  ///
+  /// Across is drawn at the top and down at the bottom-left — the directions
+  /// they read in, so the pairing needs no legend.
   final ({String? across, String? down}) clues;
 
   final VoidCallback onTap;
@@ -282,8 +296,6 @@ class _Cell extends StatelessWidget {
     final bool selected = entry.selected == cell;
     final PuzzleCellVisual visual = resolvePuzzleCell(_kind, selected: selected);
     final int? value = entry.valueAt(cell);
-    final CageEdges? boundary = edges;
-    final CageOutline? cage = outline;
 
     return GestureDetector(
       onTap: onTap,
@@ -291,25 +303,10 @@ class _Cell extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: visual.background,
-          // The thin grid, drawn on every cell. The cage's heavier border goes
-          // over it below.
-          // **A hairline, not a box.** `reactivos-puzzles.md` puts the cells
-          // at 1.5 px ink-18% and reserves weight for the board itself; at
-          // `muted` and 2 px the grid competed with everything drawn on it.
-          border: Border.all(
-            color: BrandColors.gridHairline,
-            width: BrandShape.borderWidthHairline,
-          ),
+          border: _gridRule(),
         ),
         child: CustomPaint(
-          // **Dashed pink, not solid ink.** The thick ink outline is the
-          // board's, and a cage drawn in it read as a second object stacked on
-          // the first — on a board where most cells touch a boundary, that is
-          // most of the grid in the heaviest stroke the app has. Which dash
-          // and which stroke is `cage_outline.dart`'s to say, not this line's.
-          foregroundPainter: boundary == null || cage == null
-              ? null
-              : CageEdgePainter(edges: boundary, outline: cage),
+          foregroundPainter: _cageBoundary(),
           child: Stack(
             children: <Widget>[
               if (target != null)
@@ -317,8 +314,6 @@ class _Cell extends StatelessWidget {
                   padding: const EdgeInsets.all(2),
                   child: Text(target!, style: BrandText.eyebrow(size: 10)),
                 ),
-              // Across at the top, down at the bottom-left — the directions
-              // they read in, so the pairing needs no legend.
               if (clues.across != null)
                 Align(
                   alignment: Alignment.topRight,
@@ -341,25 +336,7 @@ class _Cell extends StatelessWidget {
                 Center(
                   child: Text('$value', style: BrandText.numeral(22)),
                 ),
-              // **The ring is inset, and the fill does the shouting.** Drawn
-              // flush it landed exactly on the cage's outline — same ink, same
-              // 3 px — so a cell enclosed by its cage showed no selection at
-              // all. The inset makes it a second line a player can see beside
-              // the first, and it is still a *shape* difference, which is what
-              // BRD-1 asks of a state a reader cannot get by hue.
-              if (selected)
-                Padding(
-                  padding: const EdgeInsets.all(BrandShape.borderWidth),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: BrandColors.ink,
-                        width: BrandShape.borderWidth,
-                      ),
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
+              if (selected) _selectionRing(),
             ],
           ),
         ),
@@ -367,4 +344,51 @@ class _Cell extends StatelessWidget {
     );
   }
 
+  /// The thin grid, drawn on every cell; a cage's heavier border goes over it.
+  ///
+  /// **A hairline, not a box.** `reactivos-puzzles.md` puts the cells at 1.5 px
+  /// ink-18% and reserves weight for the board itself; at `muted` and 2 px the
+  /// grid competed with everything drawn on it.
+  Border _gridRule() => Border.all(
+        color: BrandColors.gridHairline,
+        width: BrandShape.borderWidthHairline,
+      );
+
+  /// The cage boundary crossing this cell, where one does.
+  ///
+  /// **Dashed pink, not solid ink.** The thick ink outline is the board's, and
+  /// a cage drawn in it read as a second object stacked on the first — on a
+  /// board where most cells touch a boundary, that is most of the grid in the
+  /// heaviest stroke the app has. Which dash and which stroke is
+  /// `cage_outline.dart`'s to say, not this widget's.
+  CustomPainter? _cageBoundary() {
+    final CageEdges? boundary = edges;
+    final CageOutline? cage = outline;
+    if (boundary == null || cage == null) {
+      return null;
+    }
+    return CageEdgePainter(edges: boundary, outline: cage);
+  }
+
+  /// The mark on the cell the player is looking at.
+  ///
+  /// **The ring is inset, and the fill does the shouting.** Drawn flush it
+  /// landed exactly on the cage's outline — same ink, same 3 px — so a cell
+  /// enclosed by its cage showed no selection at all. The inset makes it a
+  /// second line a player can see beside the first, and it is still a *shape*
+  /// difference, which is what BRD-1 asks of a state a reader cannot get by hue.
+  Widget _selectionRing() {
+    return Padding(
+      padding: const EdgeInsets.all(BrandShape.borderWidth),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: BrandColors.ink,
+            width: BrandShape.borderWidth,
+          ),
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
 }

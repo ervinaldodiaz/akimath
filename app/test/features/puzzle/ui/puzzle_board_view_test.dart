@@ -1,3 +1,18 @@
+/// The board on screen: its cells, its cages, and the targets beside them.
+///
+/// **Two of these are measured rather than looked for** (PROC-11). Asserting
+/// that no target text appears cannot fail when the target list is empty — the
+/// margin renders nothing either way — so what the no-targets case reads is the
+/// grid's own width. And the six line targets are six *distinct* numbers,
+/// though a real magic square's are all the same: a repeated target is
+/// indistinguishable from a target drawn twice, which is the failure that case
+/// is for.
+///
+/// **A 6×6 is the tightest layout in the app.** 330 px across six cells is 55
+/// each, which clears the 48 px minimum (BRD-2d) — a 7×7 would not, which is
+/// why the format stops at six.
+library;
+
 import 'package:akimath_app/content/model/puzzle.dart';
 import 'package:akimath_app/design/puzzle/spec/cage_outline.dart';
 import 'package:akimath_app/features/puzzle/policy/board_constraints.dart';
@@ -77,7 +92,11 @@ List<Color?> _fills(WidgetTester tester) => tester
     .toList();
 
 /// A cage per cell, so **every** cell is enclosed on all four sides by the
-/// heavy cage outline. This is the board the defect hid on.
+/// heavy cage outline.
+///
+/// This is the board the reported defect hid on: selection was a ring in ink at
+/// 3 px — the cage outline's own colour and width, on the same edges — so a
+/// cell enclosed by its cage was selectable with no visible selection at all.
 List<Cage> _cagePerCell(int size) => <Cage>[
       for (int row = 0; row < size; row++)
         for (int col = 0; col < size; col++)
@@ -112,9 +131,6 @@ void main() {
 
     testWidgets('even when its cage outlines it on all four sides',
         (WidgetTester tester) async {
-      // **The reported defect.** Selection was a ring in ink at 3 px — the
-      // cage outline's own colour and width, on the same edges — so a cell
-      // enclosed by its cage was selectable with no visible selection at all.
       await _pump(
         tester,
         entry: PuzzleEntry.of(_board()).select(const Cell(row: 1, col: 1)),
@@ -133,12 +149,9 @@ void main() {
       await _pump(tester);
       final Set<Color?> fills = _fills(tester).toSet();
 
-      // One fill for every open cell and nothing else: an unselected board has
-      // no cell standing out from the others.
       expect(fills, hasLength(1));
     });
   });
-
 
   group('the board draws its cells', () {
     testWidgets('one per square', (WidgetTester tester) async {
@@ -146,14 +159,13 @@ void main() {
       expect(find.byType(GestureDetector), findsNWidgets(9));
     });
 
-    testWidgets('a given shows its value and an open cell does not',
-        (WidgetTester tester) async {
+    testWidgets('a given shows its value — a 1 at (0,0) — and an open cell '
+        'does not', (WidgetTester tester) async {
       await _pump(
         tester,
         entry: PuzzleEntry.of(_board(given: <Cell>{const Cell(row: 0, col: 0)})),
       );
 
-      // The given at (0,0) is a 1. Nothing else is filled.
       expect(find.text('1'), findsOneWidget);
       expect(find.text('2'), findsNothing);
       expect(find.text('3'), findsNothing);
@@ -163,8 +175,6 @@ void main() {
   group('the board never draws the answer', () {
     testWidgets('no open cell shows its solution value',
         (WidgetTester tester) async {
-      // The solution rides along so grading works offline. A cell that showed
-      // what it hides would give the board away.
       await _pump(tester);
 
       int checked = 0;
@@ -179,30 +189,27 @@ void main() {
       expect(checked, 9, reason: 'the sweep must visit every open cell');
     });
 
-    testWidgets('a value the player entered is drawn, and only that',
-        (WidgetTester tester) async {
+    testWidgets('a value the player entered is drawn, and the solution it '
+        'stands in front of is not', (WidgetTester tester) async {
       final PuzzleEntry entry = PuzzleEntry.of(_board())
           .select(const Cell(row: 1, col: 1))
           .type(2);
       await _pump(tester, entry: entry);
 
-      // (1,1) solves to 3; the player typed 2, so 2 is what appears.
       expect(find.text('2'), findsOneWidget);
       expect(find.text('3'), findsNothing);
     });
   });
 
   group('a cage says what it asks, once', () {
-    testWidgets('the target appears on one cell only',
-        (WidgetTester tester) async {
+    testWidgets('the target appears on one cell only, the top-left corner of '
+        'its cage', (WidgetTester tester) async {
       await _pump(tester);
-      // Nine cells in one cage; the label belongs to its top-left corner.
       expect(find.textContaining('18'), findsOneWidget);
     });
 
-    testWidgets('a single-cell cage shows no operation',
-        (WidgetTester tester) async {
-      // `3+` on a one-cell cage is nonsense — there is nothing to add it to.
+    testWidgets('a single-cell cage shows no operation, having nothing to '
+        'combine', (WidgetTester tester) async {
       await _pump(
         tester,
         cages: <Cage>[
@@ -223,10 +230,8 @@ void main() {
       expect(find.text('1+'), findsNothing);
     });
 
-    testWidgets('a killer cage shows its target and no operation',
-        (WidgetTester tester) async {
-      // A `+` there would be a claim `KillerPayloadSchema` does not make: a
-      // killer cage asks for a sum by naming nothing.
+    testWidgets('a killer cage shows its target and no operation, asking for a '
+        'sum by naming nothing', (WidgetTester tester) async {
       await _pump(
         tester,
         cages: <Cage>[
@@ -287,9 +292,6 @@ void main() {
                 width: 330,
                 child: PuzzleBoardView(
                   entry: PuzzleEntry.of(_board()),
-                  // Six distinct numbers, though a real magic square's are
-                  // all the same — a repeated target is indistinguishable from
-                  // a target drawn twice, which is the failure this is for.
                   constraints: const BoardConstraints.lineTargets(
                     rowTargets: <int>[11, 12, 13],
                     columnTargets: <int>[21, 22, 23],
@@ -311,9 +313,6 @@ void main() {
 
     testWidgets('a board with no targets gives its grid the whole width',
         (WidgetTester tester) async {
-      // **Measured, not looked for.** Asserting that no target text appears
-      // cannot fail when the target list is empty — the margin renders nothing
-      // either way. The difference that is real is the grid's width.
       Future<double> gridWidth({required bool withTargets}) async {
         tester.view
           ..physicalSize = const Size(390, 844)
@@ -388,7 +387,6 @@ void main() {
 
     testWidgets('a cell starting two runs shows both',
         (WidgetTester tester) async {
-      // One that hid the other would hide a constraint the player needs.
       await pumpRuns(tester, const <Run>[
         Run(cells: <Cell>[Cell(row: 0, col: 0), Cell(row: 0, col: 1)], sum: 7),
         Run(cells: <Cell>[Cell(row: 0, col: 0), Cell(row: 1, col: 0)], sum: 12),
@@ -400,8 +398,6 @@ void main() {
 
     testWidgets('a run starting at the edge is still clued',
         (WidgetTester tester) async {
-      // A Kakuro's clues do not always have a blocked cell to live in — the
-      // frozen golden has a run starting at column 0 with nothing to its left.
       await pumpRuns(tester, const <Run>[
         Run(cells: <Cell>[Cell(row: 2, col: 0), Cell(row: 2, col: 1)], sum: 9),
       ]);
@@ -481,9 +477,6 @@ void main() {
   group('it fits a phone', () {
     testWidgets('a 6x6 keeps every cell above the touch minimum',
         (WidgetTester tester) async {
-      // The tightest layout in the app. 330 px across six cells is 55 each,
-      // which clears the 48 px minimum — a 7×7 would not, which is why the
-      // format stops at six.
       await _pump(
         tester,
         entry: PuzzleEntry.of(PuzzleBoard.caged(

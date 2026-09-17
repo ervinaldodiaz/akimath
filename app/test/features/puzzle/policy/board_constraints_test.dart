@@ -1,8 +1,3 @@
-import 'package:akimath_app/content/model/puzzle.dart';
-import 'package:akimath_app/design/puzzle/spec/cage_outline.dart';
-import 'package:akimath_app/features/puzzle/policy/board_constraints.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 /// What a board shows besides its cells, decided without a widget.
 ///
 /// The screen used to reconstruct this from four wildcard `switch` arms, each
@@ -10,12 +5,32 @@ import 'package:flutter_test/flutter_test.dart';
 /// those lists were empty to decide what to draw. A sixth format would have
 /// compiled, opened and drawn a bare grid. Here the switch is exhaustive over
 /// the sealed hierarchy, so the sixth format is a compile error instead — and
-/// the sweep at the bottom is the half a compiler cannot do: it says every
-/// format shows *something*.
+/// the sweep at the bottom is the half a compiler cannot do, which is finding 1
+/// of `docs/solid/puzzle.md` from the side the compiler cannot reach: a sixth
+/// format has to pick a named constructor, because there is no empty one, and
+/// the sweep says the list it picked is not empty either.
 ///
 /// The same split covers a cage's **appearance**: `BoardConstraints.cages`
 /// demands an outline, so a cage cannot reach the board without one, and the
-/// two tests below say the outline each caged format gets is its own.
+/// two tests below say the outline each caged format gets is its own. The
+/// pairing holds in both directions by a sweep rather than by an assert — a
+/// `const` constructor can refuse neither, and an assert would be stripped in
+/// release anyway (TYP-2). The compiler owns *a cage cannot be drawn unnamed*;
+/// the sweep owns *nothing names an outline it has no cage for*.
+///
+/// **The two caged leaves are named apart on purpose.** KenKen and Killer are
+/// leaves of `CagedPuzzle`, and an arm matching the parent would let a third
+/// caged format compile while drawing only the part it shares. That is the
+/// defect this file was written for: the screen read the cages off any
+/// `CagedPuzzle` and the board widget named `DashSpec.kenKenCage` itself, so
+/// the two formats were one drawing. A sixth caged format has to pick a
+/// constant of its own, and copying a sibling's is the thing said out loud.
+library;
+
+import 'package:akimath_app/content/model/puzzle.dart';
+import 'package:akimath_app/design/puzzle/spec/cage_outline.dart';
+import 'package:akimath_app/features/puzzle/policy/board_constraints.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const List<List<int>> _threeByThree = <List<int>>[
   <int>[1, 2, 3],
@@ -95,16 +110,11 @@ void main() {
       expect(shown.runs, isEmpty);
     });
 
-    test('a Killer shows its cages and nothing else', () {
-      // Same shape as a KenKen, and named separately on purpose: the two are
-      // leaves of `CagedPuzzle`, and an arm matching the parent would let a
-      // third caged format compile while drawing only the part it shares.
+    test('a Killer shows its cages, in an outline that is not the KenKen it '
+        'otherwise matches', () {
       final BoardConstraints shown = boardConstraints(_killer());
 
       expect(shown.cages, same(_cages));
-      // **The defect, where it is now decided.** The screen read the cages off
-      // any `CagedPuzzle` and the board widget named `DashSpec.kenKenCage`
-      // itself, so these two formats were the same drawing.
       expect(shown.outline, CageOutline.killer);
       expect(shown.outline, isNot(CageOutline.kenKen));
       expect(shown.rowTargets, isEmpty);
@@ -153,11 +163,6 @@ void main() {
 
   group('cages and their outline travel together', () {
     test('every format pairs them, or has neither', () {
-      // The other half of `BoardConstraints.cages` demanding an outline: the
-      // compiler owns *a cage cannot be drawn unnamed*, and this owns *nothing
-      // names an outline it has no cage for*. A `const` constructor cannot
-      // assert either, and an assert would be stripped in release anyway
-      // (TYP-2) — so it is a sweep, over a list that has to be non-empty.
       final List<BoardPuzzle> formats = _everyFormat();
       expect(formats, isNotEmpty, reason: 'a sweep over nothing sweeps nothing');
 
@@ -179,8 +184,6 @@ void main() {
     });
 
     test('and no two caged formats share an outline', () {
-      // A sixth caged format has to pick a constant here. Copying a sibling's
-      // is the defect this change fixed, so it is the one thing said out loud.
       final Set<CageOutline> outlines = <CageOutline>{
         for (final BoardPuzzle puzzle in _everyFormat())
           if (boardConstraints(puzzle).outline case final CageOutline outline)
@@ -193,10 +196,6 @@ void main() {
 
   group('every format shows something', () {
     test('none of them draws a bare grid', () {
-      // The gate finding 1 of `docs/solid/puzzle.md` asked for, from the side
-      // the compiler cannot reach. A sixth format has to pick a named
-      // constructor — there is no empty one — and this says the list it picked
-      // is not empty either.
       final List<BoardPuzzle> formats = _everyFormat();
       expect(formats, isNotEmpty, reason: 'a sweep over nothing sweeps nothing');
 

@@ -56,10 +56,6 @@ class PausedBoardView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // **The band scrolls and the buttons do not.** At `textScaler`
-              // 1.3 on the notched viewport the heading, the card and the two
-              // tiles are taller than what is left after the controls, and the
-              // controls are the reason a player opened this.
               Expanded(child: SingleChildScrollView(child: _band())),
               const SizedBox(height: BrandShape.space3),
               BrandButton.primary(label: 'Reanudar', onPressed: onResume),
@@ -75,6 +71,12 @@ class PausedBoardView extends StatelessWidget {
     );
   }
 
+  /// The heading, the cover and the two tiles — everything above the controls.
+  ///
+  /// **The band scrolls and the buttons do not.** At `textScaler` 1.3 on the
+  /// notched viewport the heading, the card and the two tiles are taller than
+  /// what is left after the controls, and the controls are the reason a player
+  /// opened this.
   Widget _band() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,18 +140,23 @@ class PausedBoardView extends StatelessWidget {
           Expanded(
             child: StatTile(
               label: summary.sizeLabel,
-              // **Scaled down rather than ellipsised.** `CUADRO MÁGICO` is the
-              // longest name and it is the whole point of the tile; a tile
-              // reading `CUADRO M…` names nothing.
-              value: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: StatValue(summary.formatName, size: 20),
-              ),
+              value: _formatNameFittedToTheTile(),
               variant: StatTileVariant.compact,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// The format's name, **scaled down rather than ellipsised.**
+  ///
+  /// `CUADRO MÁGICO` is the longest name and it is the whole point of the tile;
+  /// a tile reading `CUADRO M…` names nothing.
+  Widget _formatNameFittedToTheTile() {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: StatValue(summary.formatName, size: 20),
     );
   }
 }
