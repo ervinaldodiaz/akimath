@@ -3,9 +3,16 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
-    // Pinned at vitest's current default rather than raised: the slowest test
-    // in this package is 88ms, so 5s is already ~57x headroom, and writing it
-    // down keeps a future default change from quietly loosening the gate.
+    // Pinned at vitest's current default rather than raised, and written down
+    // so a future default change cannot quietly loosen the gate.
+    //
+    // It is **not** ~57x headroom over the slowest test any more, which is what
+    // this comment claimed while `test/pack/cli.test.ts` spawned a subprocess
+    // per case and took seconds. That file now carries its own explicit 30s per
+    // spawning case, stated where the spawn is, precisely so this figure can
+    // stay at 5s and keep every test that does not shell out honest. Raising it
+    // globally would have bought the same green run by exempting every test in
+    // the package that has no business taking five seconds.
     //
     // What it does and does not do, measured rather than assumed: a test that
     // awaits a promise nobody resolves fails here in ~2s, but a synchronous

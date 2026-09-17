@@ -544,6 +544,24 @@ the offline pack format and its OpenAPI half.
   `src/pack/` lifts authored items and template-generated ones into one pack, and
   `npm run build:pack` emits `packages/core/pack/starter.json` — 80 items across six families and
   35 boards, byte-identical on a second run, which is what makes the CI diff mean something.
+  **Its CLI suite spawns the real script, and used to spawn it through `npx`.**
+  `test/pack/cli.test.ts` is the only place `build-pack.ts` is exercised end to end — the refusal
+  paths and the byte-identical re-emit among them — and five of its six cases run it in a
+  subprocess. Against the package's 5s default that was green alone and red on a loaded machine:
+  at load average 65 three cases failed, at 93 five did and **the failure blocked
+  `.claude/hooks/verify-gate.sh` on a `git push`**, every one of them
+  `Test timed out in 5000ms` and none of them an assertion — a gate reporting machine load as a
+  defect in the pack builder, which is the result that teaches people to re-run until green
+  (PROC-14). Two things were wrong and both are fixed. **`npx` was most of the cost**: 2.99–5.48s
+  per spawn against 1.49–2.07s for the `node_modules/.bin/tsx` it ends up running, and it is a
+  failure mode of its own — with several worktrees running their suites at once it reaches for the
+  shared npm lock, answers `ECOMPROMISED` and tries to install from the network. The suite spawns
+  that binary directly now, which is also what `npm run build:pack` resolves. **And the five
+  spawning cases carry an explicit 30s**, stated per case rather than as a global `testTimeout`,
+  so every test that does not shell out stays honest at 5s. Measured after: 6/6 green at load 61,
+  the slowest case 1492ms and the file 4.64s, down from 21.81s with one case timed out at load 41.
+  **Do not copy the old `run()` helper into a new test** — spawn the local binary and say what the
+  case is allowed to take.
   **Every generated item in it used to be ungradeable** and is not any more: the answer's *shape*
   and the *spelling* the digest was taken over were computed separately, so a whole answer of −9
   was digested as `-9/1` while the field beside it said `integer` — and `canonicalize("-9")` is
