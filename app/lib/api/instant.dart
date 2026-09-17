@@ -50,11 +50,22 @@ DateTime readInstant(String value) {
   if (hour > 23 || minute > 59 || second > 59) {
     throw FormatException('time out of range', value);
   }
-  // Milliseconds only: `DateTime` on the web has no microseconds, and the
-  // server emits three digits. A longer fraction is truncated rather than
-  // refused, because the contract allows it and losing it changes no instant
-  // this product can measure.
-  final String fraction = (match.group(7) ?? '').padRight(3, '0').substring(0, 3);
-
-  return DateTime.utc(year, month, day, hour, minute, second, int.parse(fraction));
+  return DateTime.utc(
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    _millisecondsOf(match.group(7)),
+  );
 }
+
+/// A matched fraction-of-a-second as whole milliseconds.
+///
+/// **Milliseconds and no finer.** `DateTime` on the web has no microseconds and
+/// the server emits three digits, so a longer fraction is truncated rather than
+/// refused: the contract allows it, and losing it changes no instant this
+/// product can measure.
+int _millisecondsOf(String? fraction) =>
+    int.parse((fraction ?? '').padRight(3, '0').substring(0, 3));

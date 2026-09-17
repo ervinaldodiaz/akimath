@@ -27,9 +27,6 @@ void main() {
     });
 
     test('and the ceiling itself, which is admitted rather than clipped', () {
-      // `maximum` in JSON Schema is inclusive, so the boundary belongs to the
-      // in-range side. An off-by-one here would send 3_599_999 for an hour, or
-      // — the direction that matters — leave 3_600_001 alone.
       expect(reportableTimeOnTask(maxReportableTimeOnTask), maxReportableTimeOnTask);
     });
   });
@@ -42,9 +39,8 @@ void main() {
       );
     });
 
-    test('an item left open for an afternoon saturates at the same value', () {
-      // Not proportional, not wrapped: the ceiling reads as *at least this
-      // long*, which is the only true thing an in-range integer can say.
+    test('an item left open for an afternoon saturates at the same value, '
+        'neither scaled nor wrapped', () {
       expect(
         reportableTimeOnTask(const Duration(hours: 3, minutes: 20)),
         maxReportableTimeOnTask,
@@ -57,10 +53,8 @@ void main() {
     });
   });
 
-  test('nothing it returns is outside the range the wire admits', () {
-    // The safety property in one sweep, stated over the shape of the answer
-    // rather than over a list of cases: whatever a clock hands in, what comes
-    // out is sendable.
+  test('whatever a clock hands in, what comes out is inside the range the wire '
+      'admits', () {
     const List<Duration> measured = <Duration>[
       Duration(hours: -9),
       Duration(milliseconds: -1),

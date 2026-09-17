@@ -30,6 +30,18 @@ export 'sync.dart';
 /// `https://host/v1`; the server does not mount there yet, so against a local
 /// one the base URL is just `http://localhost:PORT`. The client takes the whole
 /// thing rather than assuming either.
+///
+/// **Every transport failure comes back as a value, on every operation here.**
+/// `SocketException`, `TimeoutException`, a malformed URL: a screen cannot
+/// `catch` what it never called, and letting these escape would make the caller
+/// handle errors in two shapes. Each operation has its own `…Unreachable` arm
+/// for exactly that.
+///
+/// **A 200 whose body is not what the contract promised is a `…Failed`**, on
+/// every operation here. It is not the shape the caller asked for, so it cannot
+/// be the found arm, and it is not the caller's fault, so it is not the
+/// rejected one — and a `FormatException` out of a model constructor never
+/// reaches a screen.
 class ApiClient {
   ApiClient({
     required Uri baseUrl,
@@ -45,35 +57,46 @@ class ApiClient {
   ///
   /// A timeout is not a retry policy — it is the difference between a screen
   /// that reports a failure and one that spins forever on a network that went
-  /// away mid-answer. It is a constructor parameter so the default is visible
-  /// and a caller who knows better can say so.
+  /// away mid-answer. It is a constructor parameter so the default is visible,
+  /// so a caller who knows better can say so, and so a test for a server that
+  /// never answers need not wait ten seconds for one.
   final Duration timeout;
 
+  /// The profile behind the token, or why there is not one.
   Future<MeResult> getMe(String accessToken) async {
     final Uri url = _baseUrl.resolve('me');
     try {
       final HttpClientRequest request = await _transport.getUrl(url);
-      // **A blank token sends no header at all.** Sending `Bearer ` is a header
-      // the server can only refuse, and it refuses it as `invalid_session` —
-      // "you sent something broken" — when the truth is `unauthenticated`,
-      // "you sent nothing". The server went to the trouble of separating those
-      // two, and a client that garbles the distinction wastes it. Found by
-      // running the real client against the real server, not by reading it.
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
-      return _read(response.statusCode, body);
+      final String body = await _drain(response);
+      return _readMe(response.statusCode, body);
     } on Exception catch (cause) {
-      // **Every transport failure, as a value.** `SocketException`,
-      // `TimeoutException`, a malformed URL: a screen cannot `catch` what it
-      // never called, and letting these escape would make the caller handle
-      // errors in two shapes.
       return MeUnreachable(cause.toString());
     }
   }
+
+  /// Sends the bearer header, and sends none at all for a blank token.
+  ///
+  /// **`Bearer ` with nothing after it is a header the server can only refuse**,
+  /// and it refuses it as `invalid_session` — "you sent something broken" — when
+  /// the truth is `unauthenticated`, "you sent nothing". The server went to the
+  /// trouble of separating those two, and a client that garbles the distinction
+  /// wastes it. Found by running the real client against the real server, not by
+  /// reading it.
+  void _authorize(HttpClientRequest request, String accessToken) {
+    if (accessToken.trim().isNotEmpty) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
+    }
+  }
+
+  /// The whole response body, read to the end.
+  ///
+  /// **Drained even on a 204, where it is empty**: an unread response body holds
+  /// the connection open until the client is closed.
+  Future<String> _drain(HttpClientResponse response) =>
+      response.transform(utf8.decoder).join();
 
   /// Attaches this device's player to the account the token names.
   ///
@@ -93,9 +116,7 @@ class ApiClient {
     final Uri url = _baseUrl.resolve('players/link');
     try {
       final HttpClientRequest request = await _transport.postUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set('Idempotency-Key', idempotencyKey);
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
@@ -104,7 +125,7 @@ class ApiClient {
         'ageBand': ageBand.wireName,
       }));
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readLink(response.statusCode, body);
     } on Exception catch (cause) {
       return LinkUnreachable(cause.toString());
@@ -120,12 +141,10 @@ class ApiClient {
     final Uri url = _baseUrl.resolve('packs');
     try {
       final HttpClientRequest request = await _transport.postUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readIssue(response.statusCode, body);
     } on Exception catch (cause) {
       return IssueUnreachable(cause.toString());
@@ -165,22 +184,20 @@ class ApiClient {
   /// **A 404 is the one answer that means issue a new one.** Gone, lapsed past
   /// its window, or somebody else's — the server cannot tell those apart on
   /// purpose, because distinguishing them confirms a stranger's pack exists.
+  ///
+  /// **[packId] is percent-encoded before it reaches the path.** It comes back
+  /// out of storage, and a stored value is the one input nobody reviews.
   Future<FetchPackResult> fetchPack({
     required String accessToken,
     required String packId,
   }) async {
-    // `resolve` against a base ending in a slash, and the id percent-encoded:
-    // it comes from storage, and a stored value is the one input nobody
-    // reviews.
     final Uri url = _baseUrl.resolve('packs/${Uri.encodeComponent(packId)}');
     try {
       final HttpClientRequest request = await _transport.getUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readFetchPack(response.statusCode, body);
     } on Exception catch (cause) {
       return FetchPackUnreachable(cause.toString());
@@ -217,6 +234,10 @@ class ApiClient {
   /// **The batch is one transaction on the far side.** Every source is resolved
   /// before anything is written, so a 404 means *nothing* was recorded — which
   /// is why that case is worth telling apart from a 400 here.
+  ///
+  /// **Unreachable is the one answer a retry is for.** The server drops a
+  /// duplicate attempt by itself (migration 0004), so resending a batch that
+  /// may or may not have landed is safe.
   Future<SyncResult> submitAttempts({
     required String accessToken,
     required List<AttemptSubmission> attempts,
@@ -224,16 +245,14 @@ class ApiClient {
     final Uri url = _baseUrl.resolve('attempts');
     try {
       final HttpClientRequest request = await _transport.postUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       request.write(json.encode(<String, Object?>{
         'attempts': attempts.map((AttemptSubmission a) => a.toJson()).toList(),
       }));
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readSync(response.statusCode, body);
     } on Exception catch (cause) {
       return SyncUnreachable(cause.toString());
@@ -284,12 +303,10 @@ class ApiClient {
     final Uri url = _baseUrl.resolve('me/history');
     try {
       final HttpClientRequest request = await _transport.getUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final HttpClientResponse response = await request.close().timeout(timeout);
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readHistory(response.statusCode, body);
     } on Exception catch (cause) {
       return HistoryUnreachable(cause.toString());
@@ -324,19 +341,18 @@ class ApiClient {
   /// server holds no credential that could remove it, and says so in the
   /// operation's description. The email and the sign-in survive this call.
   ///
-  /// A success is a 204 and therefore has no body to read — see [EraseResult].
+  /// **A success is a 204 and therefore has no body to read** — see
+  /// [EraseResult]. A client that parsed one anyway would turn a successful
+  /// erasure into a `FormatException` a player reads as a failure, and then not
+  /// retry, because the row really is gone.
   Future<EraseResult> eraseMe(String accessToken) async {
     final Uri url = _baseUrl.resolve('me');
     try {
       final HttpClientRequest request = await _transport.deleteUrl(url);
-      if (accessToken.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
-      }
+      _authorize(request, accessToken);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final HttpClientResponse response = await request.close().timeout(timeout);
-      // Drained even on a 204, where it is empty: an unread response body holds
-      // the connection open until the client is closed.
-      final String body = await response.transform(utf8.decoder).join();
+      final String body = await _drain(response);
       return _readErase(response.statusCode, body);
     } on Exception catch (cause) {
       return EraseUnreachable(cause.toString());
@@ -385,15 +401,13 @@ class ApiClient {
     }
   }
 
-  MeResult _read(int status, String body) {
+  /// One `GET /me` status and body, as a [MeResult].
+  MeResult _readMe(int status, String body) {
     switch (status) {
       case 200:
         try {
           return MeFound(Me.fromJson(_object(body)));
         } on FormatException catch (cause) {
-          // A 200 whose body is not a `Me` is a server that broke the contract.
-          // It is not a profile, so it cannot be `MeFound`, and it is not the
-          // caller's fault, so it is not `MeRejected`.
           return MeFailed(status: status, reason: cause.message);
         }
       case 401:

@@ -30,9 +30,6 @@ void main() {
     });
 
     test('both kinds the contract names have a Dart value', () {
-      // `puzzle` cannot be produced today — a puzzle leaves no row in any
-      // table — and it is here because the schema has it. A client that could
-      // not read one would break on the day the server can send it.
       expect(HistoryEntry.fromJson(_entry(kind: 'series')).kind, HistoryKind.series);
       expect(HistoryEntry.fromJson(_entry(kind: 'puzzle')).kind, HistoryKind.puzzle);
     });
@@ -47,10 +44,6 @@ void main() {
     });
 
     test('and an absent one is refused, unlike a null one', () {
-      // The schema marks it required *and* nullable, which is not the same as
-      // optional: the field is always there and its value is sometimes nothing.
-      // Defaulting a missing one to zero would draw "±0" where the truth is
-      // "we do not know yet".
       expect(() => HistoryEntry.fromJson(_entry(withDelta: false)), throwsFormatException);
       expect(HistoryEntry.fromJson(_entry()).ratingDelta, isNull);
     });
@@ -67,9 +60,8 @@ void main() {
       );
     });
 
-    test('and so is an instant the contract would refuse', () {
-      // The same reader `Me.createdAt` uses, which is the point of extracting
-      // it: two re-derivations of one rule is exactly R2.
+    test('and so is an instant the contract would refuse, by the same reader '
+        'Me.createdAt uses', () {
       for (final String off in <String>[
         '2026-01-02T03:04:05.678+00:00',
         '2026-02-30T00:00:00.000Z',
@@ -89,8 +81,6 @@ void main() {
 
   group('the history as a whole', () {
     test('reads a list of them, in the order it arrived', () {
-      // Not re-sorted: "newest first" is the server's decision, and a client
-      // sorting by `at` would diverge the day two sessions share an instant.
       final History history = History.fromJson(<String, Object?>{
         'entries': <Object?>[
           _entry(at: '2026-08-19T09:15:00.000Z', title: 'segunda'),
@@ -104,8 +94,6 @@ void main() {
     });
 
     test('an empty history is a history', () {
-      // A player who linked and has not synced. Not an error, not a 404, and
-      // not a state a screen should apologise for.
       final History history = History.fromJson(<String, Object?>{'entries': <Object?>[]});
 
       expect(history.entries, isEmpty);

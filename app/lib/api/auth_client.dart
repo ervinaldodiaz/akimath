@@ -78,6 +78,11 @@ class AuthClient implements AuthApi {
   /// **`callbackUrl` must be absolute.** The provider answers `MISSING_ORIGIN`
   /// otherwise — it wants either an `Origin` header or somewhere absolute to
   /// send a browser, and a mobile app has no origin to offer.
+  ///
+  /// **The address is sent as the name too.** The provider's schema wants one
+  /// and a player has none — Q5, decided: a player has no name and `players`
+  /// has no column for one, so the address is the only thing that identifies an
+  /// account.
   @override
   Future<AuthResult<Accepted>> signUp({
     required String email,
@@ -87,9 +92,6 @@ class AuthClient implements AuthApi {
     final _Answer answer = await _post('sign-up/email', <String, Object?>{
       'email': email,
       'password': password,
-      // The schema wants one and a player has none — Q5, decided: a player has
-      // no name and `players` has no column for one. The address is the only
-      // thing that identifies an account.
       'name': email,
       'callbackURL': callbackUrl,
     });
@@ -101,14 +103,16 @@ class AuthClient implements AuthApi {
   /// Needed on its own because `sendVerificationEmailOnSignUp` is off: creating
   /// the account sends nothing, so the app asks when it is ready to show the
   /// code screen.
+  ///
+  /// The `type` sent is one of `email-verification`, `sign-in`,
+  /// `forget-password` and `change-email` — the vocabulary read off the
+  /// provider's own validation error, not out of an SDK.
   @override
   Future<AuthResult<Accepted>> sendVerificationCode(String email) async {
     final _Answer answer = await _post(
       'email-otp/send-verification-otp',
       <String, Object?>{
         'email': email,
-        // One of "email-verification" | "sign-in" | "forget-password" |
-        // "change-email", read off the provider's own validation error.
         'type': 'email-verification',
       },
     );
@@ -225,9 +229,6 @@ class AuthClient implements AuthApi {
     required Map<String, Object?>? body,
     required AuthSession? session,
   }) async {
-    // `resolve` against a base that must end in a slash, or the last segment is
-    // replaced rather than appended — `.../neondb/auth` + `token` would ask for
-    // `.../neondb/token`.
     final Uri url = _slashed(_baseUrl).resolve(path);
     try {
       final HttpClientRequest request = body == null
@@ -256,6 +257,10 @@ class AuthClient implements AuthApi {
     }
   }
 
+  /// The base URL with a trailing slash, which [Uri.resolve] requires.
+  ///
+  /// **Without one, `resolve` replaces the last segment instead of appending**,
+  /// so `.../neondb/auth` plus `token` would ask for `.../neondb/token`.
   static Uri _slashed(Uri base) =>
       base.path.endsWith('/') ? base : base.replace(path: '${base.path}/');
 }
@@ -303,17 +308,17 @@ class _Answer {
     }
   }
 
+  /// The answer as a session, or a failure if it set no cookie.
+  ///
+  /// **A 2xx that carries no cookie is a failure, not an empty session.**
+  /// Handing one back would authenticate nothing and fail at the next call with
+  /// an unrelated message, which is harder to act on than saying so here.
   AuthResult<AuthSession> mapSession() {
     final AuthResult<AuthSession>? early = _early<AuthSession>();
     if (early != null) {
       return early;
     }
-    // Every `Set-Cookie` joined, because the provider sends more than one and
-    // dropping the wrong one is a session that works until it does not.
-    final String cookie = setCookie
-        .map((String header) => header.split(';').first.trim())
-        .where((String pair) => pair.isNotEmpty)
-        .join('; ');
+    final String cookie = _everySetCookieJoined;
     if (cookie.isEmpty) {
       return AuthFailed<AuthSession>(
         status: status,
@@ -322,6 +327,15 @@ class _Answer {
     }
     return AuthOk<AuthSession>(AuthSession(cookie));
   }
+
+  /// Every `Set-Cookie` the answer carried, as one `Cookie` header value.
+  ///
+  /// **All of them, because the provider sends more than one** and dropping the
+  /// wrong one is a session that works until it does not.
+  String get _everySetCookieJoined => setCookie
+      .map((String header) => header.split(';').first.trim())
+      .where((String pair) => pair.isNotEmpty)
+      .join('; ');
 
   AuthResult<T>? _early<T>() {
     if (unreachableReason != null) {

@@ -54,9 +54,6 @@ class HistoryEntry {
     kind: HistoryKind.fromWire(_read<String>(json, 'kind')),
     title: _read<String>(json, 'title'),
     at: readInstant(_read<String>(json, 'at')),
-    // A string on the wire — `4/5` — because how a score reads is a
-    // presentation decision the contract already made. Splitting it into two
-    // numbers here would be this client making it a second time.
     score: _read<String>(json, 'score'),
     ratingDelta: _readDelta(json),
   );
@@ -78,6 +75,12 @@ class HistoryEntry {
   final HistoryKind kind;
   final String title;
   final DateTime at;
+
+  /// How the session read, as the server spelled it — `4/5`.
+  ///
+  /// **A string on the wire, and a string here.** How a score reads is a
+  /// presentation decision the contract already made; splitting it into two
+  /// numbers would be this client making it a second time.
   final String score;
   final int? ratingDelta;
 

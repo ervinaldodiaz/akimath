@@ -60,7 +60,11 @@ class SkillStanding {
   /// is `@akimath/core`'s `skillName()`, on the server, and never this client's.
   final int skillId;
 
-  /// How the server rates the player at it. Unbounded by the contract.
+  /// How the server rates the player at it.
+  ///
+  /// **Unbounded by the contract, so a figure that looks wrong is still read.**
+  /// Refusing one the server is entitled to send would blank a screen over a
+  /// number.
   final double rating;
 
   /// How sure the server is of that rating. Unbounded by the contract.
@@ -151,6 +155,9 @@ class Standing {
   @override
   int get hashCode => Object.hash(playerId, Object.hashAll(skills));
 
+  /// **A count, never the ratings.** The same reading as
+  /// `LinkedSession.toString`: `toString` reaches logs and crash reports, so it
+  /// says what a developer needs and nothing more.
   @override
   String toString() => 'Standing($playerId, ${skills.length} skill(s))';
 }

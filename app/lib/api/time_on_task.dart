@@ -45,6 +45,10 @@ library;
 /// `contract/openapi.json`. Stated here as a `Duration` because that is what
 /// the client holds, and held to the document's own number by
 /// `test/api/contract_parity_test.dart`.
+///
+/// **`maximum` in JSON Schema is inclusive**, so the boundary belongs to the
+/// in-range side: an off-by-one would send 3_599_999 for an hour, or — the
+/// direction that matters — leave 3_600_001 alone.
 const Duration maxReportableTimeOnTask = Duration(hours: 1);
 
 /// The measurement, brought inside the bound the wire will accept.

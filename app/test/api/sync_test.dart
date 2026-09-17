@@ -1,3 +1,21 @@
+/// What an [AttemptSubmission] puts on the wire, at runtime.
+///
+/// **Two of this file's invariants are enforced by the compiler, and what is
+/// left here is the half a `test` can still reach.** Naming neither source or
+/// both is unwritable — the generative constructor is private to `sync.dart`
+/// and each public door sets the other field itself — so that half is a build
+/// failure rather than a red case, and the falsification for it is recorded as
+/// one. What these cases check is that each door leaves exactly one source on
+/// the wire, and that an out-of-range `elapsed` is brought inside the bound:
+/// the properties those constructor shapes exist to guarantee.
+///
+/// **They replace two `throwsA(isA<AssertionError>())` cases rather than
+/// deleting them.** `flutter build --release` strips an assert, so both
+/// guarantees held in every test and in no shipping binary (TYP-2), and losing
+/// the last test of an invariant on the way to strengthening it is the PROC-11
+/// regression that rule warns about.
+library;
+
 import 'package:akimath_app/api/sync.dart';
 import 'package:akimath_app/api/time_on_task.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,20 +58,6 @@ void main() {
     });
 
     test('and never neither or both, in the build a player runs', () {
-      // **The compiler is the enforcement, and this is what is left to assert
-      // at runtime.** Naming neither source or both is unwritable: the
-      // generative constructor is private to `sync.dart` and the two public
-      // doors each set the other field themselves. That half cannot be a
-      // `test`, because the code expressing it does not compile — see the
-      // ledger's falsification, which is a build failure rather than a red
-      // case. What is checkable here is that each door leaves exactly one
-      // source on the wire, which is the property the private constructor
-      // exists to guarantee.
-      //
-      // It used to be an `assert`, and `flutter build --release` strips those:
-      // every test saw a refusal no shipping binary made, and a batch naming
-      // both comes back a 400, which `journalAfter` reads as a batch there is
-      // no point resending — up to two hundred answers deleted in silence.
       final AttemptSubmission byPack = AttemptSubmission.forPackItem(
         ref: const PackRef(packId: _pack, index: 0),
         sessionId: _session,
@@ -78,8 +82,6 @@ void main() {
     });
 
     test('and it carries no verdict, because there is nowhere to put one', () {
-      // §4's invariant. The server grades; a field here asserting the answer
-      // was right is the thing the frozen schema refuses to have.
       final Map<String, Object?> body = AttemptSubmission.forPackItem(
         ref: const PackRef(packId: _pack, index: 0),
         sessionId: _session,
@@ -104,7 +106,6 @@ void main() {
         ).toJson()['elapsedMs'],
         67000,
       );
-      // The ceiling itself is in range, so it is not clamped to something else.
       expect(
         AttemptSubmission.forPackItem(
           ref: const PackRef(packId: _pack, index: 0),
@@ -118,11 +119,6 @@ void main() {
     });
 
     test('a negative one is floored rather than refused', () {
-      // **This replaces a `throwsA(isA<AssertionError>())`, it does not delete
-      // it.** The assert was stripped by `flutter build --release`, so the
-      // guarantee it advertised held in every test and in no shipping binary
-      // (TYP-2). Losing the last test of an invariant on the way to
-      // strengthening it is the PROC-11 regression that rule warns about.
       expect(
         AttemptSubmission.forPackItem(
           ref: const PackRef(packId: _pack, index: 0),
@@ -135,11 +131,8 @@ void main() {
       );
     });
 
-    test('and one measured past the bound saturates at it', () {
-      // An item left open for an afternoon — a phone in a pocket, a call
-      // taken. Before 2026-09-02 this sent 12_000_000, the server refused the
-      // whole body with a 400, and `journalAfter` read that as a batch to drop:
-      // up to two hundred real answers deleted over one timer.
+    test('and one measured past the bound — an afternoon in a pocket — '
+        'saturates at it', () {
       expect(
         AttemptSubmission.forPackItem(
           ref: const PackRef(packId: _pack, index: 0),
@@ -153,8 +146,6 @@ void main() {
     });
 
     test('the instant is UTC on the wire whatever the device says', () {
-      // The server pins `date-time` to a literal `Z`. A local instant would
-      // round-trip to different bytes and the two would stop agreeing.
       final Map<String, Object?> body = AttemptSubmission.forPackItem(
         ref: const PackRef(packId: _pack, index: 0),
         sessionId: _session,
@@ -222,9 +213,6 @@ void main() {
     });
 
     test('the body is carried, not parsed', () {
-      // `content/pack_reader.dart` already knows what a pack is and refuses an
-      // expired or malformed one. Parsing it twice would be two answers to the
-      // same question.
       expect(
         IssuedPack.fromJson(<String, Object?>{...body(), 'pack': <String, Object?>{}}).pack,
         isEmpty,

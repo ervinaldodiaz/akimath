@@ -1,3 +1,23 @@
+/// `app/lib/api/` held against `contract/openapi.json`, operation by operation.
+///
+/// **Three facts this file asserts by omission, which no test name can say.**
+/// `500` is deliberately absent from the statuses checked against `GET /me`:
+/// the contract does not declare it, and the client must survive one anyway, so
+/// it falls into the catch-all rather than a branch of its own. The `501` list
+/// is checked the other way round — an operation stops advertising itself as
+/// unbuilt in the diff that builds it, which is the client's half of the
+/// server's `test/contract-parity.test.ts`. And `SkillStanding.rating` is
+/// asserted **not** nullable: the day the schema gains `nullable: true` there,
+/// this file goes red and the model has a decision to revisit.
+///
+/// **The out-of-range probe is out of range on purpose.** The time-on-task case
+/// read `4200` ms against a maximum of 3_600_000 until 2026-09-02 — PROC-11's
+/// fifth bullet, an assertion that was sound over a fixture that made it
+/// insensitive, so a test named for the bound could not fail on anything the
+/// app produces. The `greaterThan(maximum)` guard beside the probe is what
+/// stops that returning.
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +28,33 @@ import 'package:akimath_app/api/sync.dart';
 import 'package:akimath_app/api/time_on_task.dart';
 import 'package:akimath_app/features/sync/policy/attempt_journal.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// Instants the frozen pattern and the Dart model both take.
+const List<String> _acceptedByBoth = <String>[
+  '2026-08-19T09:15:00.000Z',
+  '2026-01-02T03:04:05.678Z',
+  '2026-01-02T03:04:05Z',
+  '2026-01-02T03:04Z',
+  '2028-02-29T00:00:00.000Z',
+  '2000-02-29T00:00:00.000Z',
+  '2026-01-31T23:59:59.999Z',
+];
+
+/// Instants both refuse, several of which `DateTime.parse` would happily read.
+const List<String> _refusedByBoth = <String>[
+  '2026-01-02T03:04:05.678+00:00',
+  '2026-01-02T03:04:05.678',
+  '2026-01-02 03:04:05.678Z',
+  '2026-02-30T00:00:00.000Z',
+  '2025-02-29T00:00:00.000Z',
+  '1900-02-29T00:00:00.000Z',
+  '2026-04-31T00:00:00.000Z',
+  '2026-13-01T00:00:00.000Z',
+  '2026-01-02T24:00:00.000Z',
+  '2026-01-02T03:60:00.000Z',
+  'yesterday',
+  '',
+];
 
 /// The frozen contract, read rather than restated.
 ///
@@ -77,18 +124,15 @@ void main() {
       expect(sample.toJson().keys.toSet(), containsAll(required));
     });
 
-    test('and no field the schema does not describe', () {
-      // `additionalProperties: false` means the server will never send one, so
-      // a field here that is not there is a field the client invented.
+    test('and no field the schema does not describe, so the client cannot '
+        'invent one', () {
       final Map<String, Object?> properties =
           me['properties']! as Map<String, Object?>;
       expect(sample.toJson().keys.toSet(), properties.keys.toSet());
     });
 
-    test('every band the schema names, in the order it names them', () {
-      // Order too: `AgeBand.values` is what a `switch` is checked against, and
-      // a set comparison would pass while the two drifted into different
-      // orders — which is how an index-based serialisation silently rotates.
+    test('every band the schema names, in the order it names them, because a '
+        'set comparison would pass while the two rotated', () {
       final Map<String, Object?> properties =
           me['properties']! as Map<String, Object?>;
       final Map<String, Object?> band =
@@ -133,8 +177,6 @@ void main() {
     });
 
     test('ratingDelta is nullable in the schema and nullable here', () {
-      // Required *and* nullable is not the same as optional, and the difference
-      // is what stops a client drawing "±0" where the truth is "not yet".
       final Map<String, Object?> delta =
           properties['ratingDelta']! as Map<String, Object?>;
 
@@ -144,8 +186,6 @@ void main() {
     });
 
     test('and its instant is read by the same reader Me uses', () {
-      // One rule, one implementation. Two re-derivations of the contract's
-      // `date-time` is exactly the drift R2 names.
       final Map<String, Object?> at = properties['at']! as Map<String, Object?>;
       final Map<String, Object?> meProperties =
           me['properties']! as Map<String, Object?>;
@@ -205,10 +245,6 @@ void main() {
     });
 
     test('rating is required and NOT nullable, which is why there is no null to send', () {
-      // The asymmetry with `HistoryEntry.ratingDelta` is the whole reason an
-      // unrated player is an empty list rather than a list of nulls. If this
-      // ever gains `nullable: true` the model has a decision to revisit, and
-      // this test is what will say so.
       final Map<String, Object?> rating =
           skillProperties['rating']! as Map<String, Object?>;
 
@@ -217,7 +253,7 @@ void main() {
       expect(rating['type'], 'number');
     });
 
-    test('an unrated player is representable, and is an empty list', () {
+    test('an unrated player is an empty list, and still a whole Standing', () {
       const Standing unrated = Standing(
         playerId: '018f4e3c-0000-7000-8000-0000000000b1',
         skills: <SkillStanding>[],
@@ -225,8 +261,6 @@ void main() {
 
       expect(unrated.isUnrated, isTrue);
       expect(unrated.toJson()['skills'], isEmpty);
-      // Still every field the schema requires: an empty standing is a whole
-      // `Standing`, not a partial one.
       expect(unrated.toJson().keys.toSet(), containsAll(standingRequired));
     });
 
@@ -242,11 +276,6 @@ void main() {
     });
 
     test('the operation is one the contract describes, and no longer unbuilt', () {
-      // **The 501 came off in the diff that built it.** The server's
-      // `contract-parity.test.ts` holds the contract's 501 list to exactly the
-      // operations that are not implemented; this is the client's half of the
-      // same fact, so a client is not left mapping a status the server can no
-      // longer return.
       final Map<String, Object?> paths = contract['paths']! as Map<String, Object?>;
       final Map<String, Object?> get =
           (paths['/me/standing']! as Map<String, Object?>)['get']!
@@ -267,9 +296,11 @@ void main() {
     final Map<String, Object?> properties =
         schema['properties']! as Map<String, Object?>;
 
-    // One function per source rather than one taking a flag: the two
-    // constructions are now two constructors, and a boolean selecting between
-    // them would be the one shape FUN-2 bans.
+    /// A submission naming a pack item, as it goes on the wire.
+    ///
+    /// One builder per source rather than one taking a flag: the two
+    /// constructions are two constructors now, and a boolean selecting between
+    /// them would be the shape FUN-2 bans.
     Map<String, Object?> sentByPack({
       Duration elapsed = const Duration(milliseconds: 4200),
     }) => AttemptSubmission.forPackItem(
@@ -280,6 +311,7 @@ void main() {
       elapsed: elapsed,
     ).toJson();
 
+    /// The same, naming an item the server issued.
     Map<String, Object?> sentByIssuedItem({
       Duration elapsed = const Duration(milliseconds: 4200),
     }) => AttemptSubmission.forIssuedItem(
@@ -320,9 +352,8 @@ void main() {
       }
     });
 
-    test('and no field the schema does not describe', () {
-      // `additionalProperties: false` means the server refuses one, so a field
-      // here that is not there is a batch that comes back a 400.
+    test('and no field the schema does not describe, or the batch comes back '
+        'a 400', () {
       for (final Map<String, Object?> body in <Map<String, Object?>>[
         sentByPack(),
         sentByIssuedItem(),
@@ -331,10 +362,8 @@ void main() {
       }
     });
 
-    test('exactly one source, which the schema cannot say and the server does', () {
-      // Both are optional in the document — 3.0.3 has no union the hand-written
-      // client could read — so the rule lives in the operation's description
-      // and in two enforcements. This is the client's.
+    test('exactly one source — 3.0.3 has no union, so the schema cannot say it '
+        'and two enforcements do', () {
       expect(required, isNot(contains('itemId')));
       expect(required, isNot(contains('packRef')));
       expect(sentByPack().containsKey('itemId'), isFalse);
@@ -347,11 +376,6 @@ void main() {
     });
 
     test('and time on task stays inside the bound the schema sets', () {
-      // **The probe is past the bound on purpose.** This case read `4200` ms
-      // against a maximum of 3_600_000 until 2026-09-02, which is PROC-11's
-      // fifth bullet: the assertion was sound and the fixture made it
-      // insensitive, so a test named for the bound could not fail on any input
-      // the app produces.
       final Map<String, Object?> elapsed =
           properties['elapsedMs']! as Map<String, Object?>;
       final int maximum = elapsed['maximum']! as int;
@@ -372,9 +396,6 @@ void main() {
     });
 
     test('the bound the client saturates at is the bound the document sets', () {
-      // The client holds the number as a `Duration`, which is a re-derivation
-      // and therefore something that can drift — the same arrangement, and the
-      // same remedy, as `instant.dart` against the frozen `date-time`.
       final Map<String, Object?> elapsed =
           properties['elapsedMs']! as Map<String, Object?>;
 
@@ -397,10 +418,6 @@ void main() {
   });
 
   group("createdAt agrees with the contract's own pattern", () {
-    // The model re-derives the rules rather than copying the frozen regular
-    // expression — a copy is a second source of truth. This is what keeps the
-    // re-derivation honest: both are run over the same probes and must agree
-    // on every one.
     late final RegExp frozen;
 
     setUpAll(() {
@@ -412,27 +429,8 @@ void main() {
     });
 
     const List<String> probes = <String>[
-      // Accepted by both.
-      '2026-08-19T09:15:00.000Z',
-      '2026-01-02T03:04:05.678Z',
-      '2026-01-02T03:04:05Z',
-      '2026-01-02T03:04Z',
-      '2028-02-29T00:00:00.000Z',
-      '2000-02-29T00:00:00.000Z',
-      '2026-01-31T23:59:59.999Z',
-      // Refused by both.
-      '2026-01-02T03:04:05.678+00:00',
-      '2026-01-02T03:04:05.678',
-      '2026-01-02 03:04:05.678Z',
-      '2026-02-30T00:00:00.000Z',
-      '2025-02-29T00:00:00.000Z',
-      '1900-02-29T00:00:00.000Z',
-      '2026-04-31T00:00:00.000Z',
-      '2026-13-01T00:00:00.000Z',
-      '2026-01-02T24:00:00.000Z',
-      '2026-01-02T03:60:00.000Z',
-      'yesterday',
-      '',
+      ..._acceptedByBoth,
+      ..._refusedByBoth,
     ];
 
     test('on every probe, accepted or refused together', () {
@@ -472,23 +470,19 @@ void main() {
       expect(get['operationId'], 'getMe');
     });
 
-    test('every status the client maps is one the contract declares', () {
-      // The client turns statuses into a sealed union. A status it handles that
-      // the contract never declares is a branch written from memory.
+    test('every status the client maps is one the contract declares, never one '
+        'written from memory', () {
       final Map<String, Object?> paths = contract['paths']! as Map<String, Object?>;
       final Map<String, Object?> path = paths['/me']! as Map<String, Object?>;
       final Map<String, Object?> get = path['get']! as Map<String, Object?>;
       final Set<String> declared =
           (get['responses']! as Map<String, Object?>).keys.toSet();
 
-      // 500 is deliberately absent: the contract does not declare it and the
-      // client must still survive one, so it falls into the catch-all rather
-      // than a branch of its own.
       expect(declared, containsAll(<String>['200', '401', '404']));
     });
 
-    test('every carried-not-validated field is really in the schema', () {
-      // A stale exclusion silently excuses nothing.
+    test('every carried-not-validated field is really in the schema, so a stale '
+        'exclusion excuses nothing', () {
       final Map<String, Object?> properties =
           me['properties']! as Map<String, Object?>;
       for (final MapEntry<String, String> entry in _carriedNotValidated.entries) {
@@ -506,28 +500,25 @@ void main() {
       expect(post['operationId'], 'linkPlayer');
     });
 
-    test('every status the client maps is one the contract declares', () {
+    test('every status the client maps is one the contract declares, 409 '
+        'included', () {
       final Map<String, Object?> paths = contract['paths']! as Map<String, Object?>;
       final Map<String, Object?> post =
           (paths['/players/link']! as Map<String, Object?>)['post']! as Map<String, Object?>;
       final Set<String> declared =
           (post['responses']! as Map<String, Object?>).keys.toSet();
 
-      // One branch per status the client has a result type for. 409 is the one
-      // this operation added, and a client that mapped it without the contract
-      // declaring it would be reading a status from memory.
       expect(declared, containsAll(<String>['200', '400', '401', '409']));
     });
 
-    test('the request carries what the schema requires and nothing more', () {
+    test('the request carries what the schema requires and nothing more, so a '
+        'new field fails rather than going unsent', () {
       final Map<String, Object?> link = _schema(contract, 'PlayerLink');
       final Set<String> required =
           (link['required']! as List<Object?>).cast<String>().toSet();
       final Set<String> properties =
           (link['properties']! as Map<String, Object?>).keys.toSet();
 
-      // What `linkPlayer` sends, spelled here so a field added to the schema
-      // without a parameter fails rather than silently going unsent.
       expect(required, <String>{'playerId', 'ageBand'});
       expect(properties, required);
       expect(link['additionalProperties'], isFalse);
