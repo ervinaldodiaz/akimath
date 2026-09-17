@@ -96,30 +96,38 @@ class PuzzleSolvedScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        StatTile(
-          label: 'TIEMPO',
-          // **`elapsed`, not `seconds`.** The verdict screens print `4,2 s`
-          // because an item is a reaction and a tenth of a second is the
-          // interesting part. A puzzle is a sitting: an hour of Kakuro reads
-          // `3 849,0 s`, which is not a time a person can take in — and it
-          // overflows the tile at `textScaler` 1.3, which is how this was
-          // found.
-          value: StatValue(
-            EsMxNumber.elapsed(elapsed),
-            size: StatTileVariant.raised.valueSize,
-          ),
-          variant: StatTileVariant.raised,
-        ),
+        _timeTile(),
         const SizedBox(width: BrandShape.space3),
-        StatTile(
-          label: 'RACHA',
-          value: StatValue(
-            EsMxNumber.integer(streakDays),
-            size: StatTileVariant.raised.valueSize,
-          ),
-          variant: StatTileVariant.raised,
-        ),
+        _streakTile(),
       ],
+    );
+  }
+
+  /// How long the sitting took, printed as **`elapsed` and not `seconds`.**
+  ///
+  /// The verdict screens print `4,2 s` because an item is a reaction and a
+  /// tenth of a second is the interesting part. A puzzle is a sitting: an hour
+  /// of Kakuro reads `3 849,0 s`, which is not a time a person can take in —
+  /// and it overflows the tile at `textScaler` 1.3, which is how this was found.
+  Widget _timeTile() {
+    return StatTile(
+      label: 'TIEMPO',
+      value: StatValue(
+        EsMxNumber.elapsed(elapsed),
+        size: StatTileVariant.raised.valueSize,
+      ),
+      variant: StatTileVariant.raised,
+    );
+  }
+
+  Widget _streakTile() {
+    return StatTile(
+      label: 'RACHA',
+      value: StatValue(
+        EsMxNumber.integer(streakDays),
+        size: StatTileVariant.raised.valueSize,
+      ),
+      variant: StatTileVariant.raised,
     );
   }
 }

@@ -48,6 +48,9 @@ class PuzzleScreen extends StatefulWidget {
   final VoidCallback? onClose;
 
   /// Called once, when the last cell makes the board correct.
+  ///
+  /// Once, and only on the transition: a callback that fired on every keystroke
+  /// after completion would push a verdict screen per digit.
   final VoidCallback? onSolved;
 
   /// Called once, the first time a value lands on the board.
@@ -70,6 +73,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   late PuzzleEntry _entry = PuzzleEntry.of(widget.puzzle.board);
   bool _reported = false;
   bool _practised = false;
+
+  /// Whether `Hoja de referencia` is drawn over the board.
+  ///
+  /// **The pad goes with the board.** A key left live under an open sheet lands
+  /// a digit on a grid nobody can see — and `_apply` would report
+  /// `onPractised` and `onSolved` from behind the card. The design covers the
+  /// pad area too: `Hoja de referencia` runs from 150 to the bottom of the
+  /// screen. Same reading as the sopa's word list.
   bool _rulesOpen = false;
 
   /// **In memory only.** Nothing writes a half-finished board to disk, so a
@@ -79,22 +90,23 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   bool _paused = false;
 
   void _apply(PuzzleEntry next) {
-    // **What landed on the board**, not what was pressed. Selecting a cell, and
-    // a digit the board cannot hold, both leave `filled` alone — and neither
-    // asserts anything about the puzzle.
-    final bool committed = !mapEquals(next.filled, _entry.filled);
+    final bool committed = _landsAValue(next);
     setState(() => _entry = next);
     if (!_practised && committed) {
       _practised = true;
       widget.onPractised?.call();
     }
-    // Once, and only on the transition. A callback that fired on every keystroke
-    // after completion would push a verdict screen per digit.
     if (!_reported && next.isSolved) {
       _reported = true;
       widget.onSolved?.call();
     }
   }
+
+  /// Whether [next] puts something **on the board**, rather than being a press.
+  ///
+  /// Selecting a cell, and a digit the board cannot hold, both leave `filled`
+  /// alone — and neither asserts anything about the puzzle.
+  bool _landsAValue(PuzzleEntry next) => !mapEquals(next.filled, _entry.filled);
 
   /// The digits this board cannot hold.
   ///
@@ -148,12 +160,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                     : Center(child: _board()),
               ),
               const SizedBox(height: BrandShape.space3),
-              // **The pad goes with the board.** A key left live under an open
-              // sheet lands a digit on a grid nobody can see — and `_apply`
-              // would report `onPractised` and `onSolved` from behind the card.
-              // The design covers the pad area too: `Hoja de referencia` runs
-              // from 150 to the bottom of the screen. Same reading as the
-              // sopa's word list.
               if (!_rulesOpen)
                 Keypad(
                   layout: KeypadLayout.puzzle,
@@ -186,54 +192,74 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: <Widget>[
-        // **Labelled**, because a glyph-only control says nothing to a screen
-        // reader — and a full-screen session has no system back on iOS. It is
-        // the direct way out; the pause screen offers the same exit with the
-        // cost of taking it spelled out.
-        Semantics(
-          label: 'Salir',
-          button: true,
-          child: IconButtonTile(
-            onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
-            child: const BrandIcon(BrandGlyph.close, size: 22),
-          ),
-        ),
-        // **Ellipsised inside an `Expanded`**, because the header carries three
-        // 48px controls once pause lands and `CUADRO MÁGICO` at `textScaler`
-        // 1.3 is wider than what is left.
-        Expanded(
-          child: Center(
-            child: Text(
-              puzzleFormatName(widget.puzzle),
-              style: BrandText.eyebrow(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-        Semantics(
-          label: 'Cómo se juega',
-          button: true,
-          child: IconButtonTile(
-            toggled: _rulesOpen,
-            onPressed: () => setState(() => _rulesOpen = !_rulesOpen),
-            child: const BrandIcon(BrandGlyph.hint, size: 22),
-          ),
-        ),
+        _exitControl(),
+        _formatName(),
+        _rulesControl(),
         const SizedBox(width: BrandShape.space2),
-        // Where the design puts it: the right of the board's own header.
-        Semantics(
-          label: 'Pausar',
-          button: true,
-          child: IconButtonTile(
-            onPressed: () => setState(() {
-              _paused = true;
-              _rulesOpen = false;
-            }),
-            child: const BrandIcon(BrandGlyph.pause, size: 20),
-          ),
-        ),
+        _pauseControl(),
       ],
+    );
+  }
+
+  /// The direct way out of the board.
+  ///
+  /// **Labelled**, because a glyph-only control says nothing to a screen reader
+  /// — and a full-screen session has no system back on iOS. The pause screen
+  /// offers the same exit with the cost of taking it spelled out.
+  Widget _exitControl() {
+    return Semantics(
+      label: 'Salir',
+      button: true,
+      child: IconButtonTile(
+        onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
+        child: const BrandIcon(BrandGlyph.close, size: 22),
+      ),
+    );
+  }
+
+  /// What the player is playing, across the middle of the header.
+  ///
+  /// **Ellipsised inside an `Expanded`**, because the header carries three 48px
+  /// controls once pause lands and `CUADRO MÁGICO` at `textScaler` 1.3 is wider
+  /// than what is left.
+  Widget _formatName() {
+    return Expanded(
+      child: Center(
+        child: Text(
+          puzzleFormatName(widget.puzzle),
+          style: BrandText.eyebrow(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
+  /// Opens and closes `Hoja de referencia`.
+  Widget _rulesControl() {
+    return Semantics(
+      label: 'Cómo se juega',
+      button: true,
+      child: IconButtonTile(
+        toggled: _rulesOpen,
+        onPressed: () => setState(() => _rulesOpen = !_rulesOpen),
+        child: const BrandIcon(BrandGlyph.hint, size: 22),
+      ),
+    );
+  }
+
+  /// Covers the board, where the design puts it: the right of its own header.
+  Widget _pauseControl() {
+    return Semantics(
+      label: 'Pausar',
+      button: true,
+      child: IconButtonTile(
+        onPressed: () => setState(() {
+          _paused = true;
+          _rulesOpen = false;
+        }),
+        child: const BrandIcon(BrandGlyph.pause, size: 20),
+      ),
     );
   }
 }

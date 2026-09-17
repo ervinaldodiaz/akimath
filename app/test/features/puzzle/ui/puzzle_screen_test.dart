@@ -1,3 +1,37 @@
+/// A KenKen played through the shared board screen.
+///
+/// **Working on a board is practice.** The streak counts days practised and a
+/// round records on submit, right or wrong; a board's analogue of submitting is
+/// putting a value on it.
+///
+/// **The pad offers only what the board can hold.** Nine keys on a board that
+/// admits three: the six that cannot act used to look identical to the three
+/// that can and simply did nothing, which is what the preferences screen
+/// already argues against.
+///
+/// **Pausing covers, it does not erase** — *tablero tapado, no borrado*. The
+/// entry is the `State`'s and pausing only changes what is drawn, which is the
+/// whole reason this is one screen and not two routes.
+///
+/// **A cage is drawn in its own format's outline.** The defect: both call sites
+/// named `DashSpec.kenKenCage` themselves, so Killer — which routes through the
+/// same widget — drew KenKen's `6 4` dash. `DashSpec.killerCage` reached no
+/// screen, and the only test that read its round cap read a constant rather
+/// than a painter. Measured here before the fix: `6.0 on / 4.0 off, butt cap`.
+///
+/// **One case is named for what it checks**, which is not what it was called.
+/// It read *"a key pressed while it is open does nothing"* and pressed no key —
+/// it could not: nothing is mounted to press, which is the whole claim. What
+/// stood in for the behaviour was `expect(solved, 0)` over an `int` the harness
+/// had snapshotted at zero, so the line held for every input and the name
+/// advertised a behavioural check nobody had written (PROC-11, twice over). The
+/// absence assertion carries the load, and it is enough: it goes red both when
+/// the `if (!_rulesOpen)` guard is removed **and** when a pad is left mounted
+/// with its keys merely disabled, because a disabled key is still a
+/// `KeypadKeyView`. Adding a press back is not available — a tap needs a target
+/// — and a tap-if-present would be the same vacuous line in a different shape.
+library;
+
 import 'package:akimath_app/content/model/puzzle.dart';
 import 'package:akimath_app/design/painting/spec/dash_spec.dart';
 import 'package:akimath_app/design/puzzle/cage_edge_painter.dart';
@@ -144,10 +178,11 @@ Finder _onBoard(String value) => find.descendant(
     );
 
 /// Taps the cell at [row], [col] — the board lays them out in reading order.
+///
+/// Scoped to the board for the same reason [_onBoard] is: the header buttons
+/// and every keypad key are gesture detectors too, so an unscoped index taps
+/// something else entirely and the test passes having exercised nothing.
 Future<void> _tapCell(WidgetTester tester, int row, int col) async {
-  // Scoped to the board for the same reason `_onBoard` is: the header buttons
-  // and every keypad key are gesture detectors too, so an unscoped index taps
-  // something else entirely and the test passes having exercised nothing.
   await tester.tap(
     find
         .descendant(
@@ -170,8 +205,6 @@ void main() {
   group('working on a board is practice', () {
     testWidgets('the first value entered reports it, once',
         (WidgetTester tester) async {
-      // The streak counts days practised, and a round records on submit right
-      // or wrong. A board's analogue of submitting is putting a value on it.
       int practised = 0;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -199,10 +232,8 @@ void main() {
       expect(practised, 1, reason: 'the day is recorded once, not per digit');
     });
 
-    testWidgets('a key the board cannot hold is not practice',
-        (WidgetTester tester) async {
-      // A 3×3 KenKen admits 1 to 3. Pressing 9 changes nothing on the board, so
-      // it asserts nothing about the puzzle.
+    testWidgets('a key the board cannot hold is not practice, asserting '
+        'nothing about the puzzle', (WidgetTester tester) async {
       int practised = 0;
       tester.view
         ..physicalSize = const Size(390, 844)
@@ -248,12 +279,8 @@ void main() {
     });
   });
 
-
   group('the pad offers only what the board can hold', () {
     testWidgets('a 3x3 offers three digits', (WidgetTester tester) async {
-      // Nine keys on a board that admits three. The six that cannot act used to
-      // look identical to the three that can and simply did nothing — which is
-      // what the preferences screen already argues against.
       await _pump(tester);
 
       for (final String digit in <String>['1', '2', '3']) {
@@ -262,13 +289,12 @@ void main() {
       for (final String digit in <String>['4', '5', '6', '7', '8', '9']) {
         expect(_available(tester, digit), isFalse, reason: '$digit cannot act');
       }
-      // Backspace always can.
-      expect(_available(tester, 'backspace'), isTrue);
+      expect(_available(tester, 'backspace'), isTrue,
+          reason: 'backspace always can');
     });
 
-    testWidgets('pressing an unavailable key still enters nothing',
-        (WidgetTester tester) async {
-      // The presentation changed, not the rule.
+    testWidgets('pressing an unavailable key still enters nothing, because '
+        'only the presentation changed', (WidgetTester tester) async {
       await _pump(tester);
       await _tapCell(tester, 0, 0);
       await _press(tester, '7');
@@ -276,13 +302,12 @@ void main() {
     });
   });
 
-
   group('the screen composes the board and the pad it was built for', () {
-    testWidgets('both are there', (WidgetTester tester) async {
+    testWidgets('both are there — the board, and the 5×2 pad whose missing '
+        'submit key is how a board announces itself finished',
+        (WidgetTester tester) async {
       await _pump(tester);
       expect(find.byType(PuzzleBoardView), findsOneWidget);
-      // The 5×2 puzzle pad: nine digits and a backspace, and no submit — a
-      // board announces itself finished rather than being submitted.
       expect(find.byType(KeypadKeyView), findsNWidgets(10));
       expect(
         find.byWidgetPredicate(
@@ -333,21 +358,18 @@ void main() {
 
       expect(solved(), 1);
 
-      // And typing again does not report a second time — a callback firing on
-      // every keystroke after completion would push a verdict per digit.
       await _tapCell(tester, 0, 0);
       await _press(tester, '1');
       expect(solved(), 1);
     });
 
-    testWidgets('a full but wrong board reports nothing',
+    testWidgets('a full but wrong board reports nothing, every cell a 1',
         (WidgetTester tester) async {
       final int Function() solved = await _pump(tester);
 
       for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
           await _tapCell(tester, row, col);
-          // Every cell a 1: full, and wrong everywhere it matters.
           await _press(tester, '1');
         }
       }
@@ -368,8 +390,6 @@ void main() {
 
     testWidgets('the rules come from the pack and are shown on demand',
         (WidgetTester tester) async {
-      // Three lines in front of a board is a wall between a player and the
-      // thing they came for.
       await _pump(tester);
       expect(find.textContaining('se repite'), findsNothing);
 
@@ -385,31 +405,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('KENKEN EN CORTO'), findsOneWidget);
-      // The board is gone rather than squeezed: a grid that resized under a
-      // player's hand while they read the rules is what the card replaces.
-      expect(find.byType(PuzzleBoardView), findsNothing);
-      // **And the pad goes with it.** A key left live under the sheet lands a
-      // digit on a board nobody can see, and can complete one — `_apply`
-      // reports `onSolved` from behind the card. The design covers the pad
-      // area too (Hoja de referencia runs top 150 to bottom 14).
-      expect(find.byType(KeypadKeyView), findsNothing);
+      expect(find.byType(PuzzleBoardView), findsNothing,
+          reason: 'the board is replaced rather than squeezed');
+      expect(find.byType(KeypadKeyView), findsNothing,
+          reason: 'the pad goes with the board it types into');
     });
 
-    // **Named for what it checks**, which is not what it was called.
-    //
-    // It read *"a key pressed while it is open does nothing"* and pressed no
-    // key — it could not: nothing is mounted to press, which is the whole
-    // claim. What stood in for the behaviour was `expect(solved, 0)` over an
-    // `int` the harness had snapshotted at zero, so the line held for every
-    // input and the name advertised a behavioural check nobody had written
-    // (PROC-11, twice over).
-    //
-    // The absence assertion carries the load, and it is enough: it goes red
-    // both when the `if (!_rulesOpen)` guard is removed **and** when a pad is
-    // left mounted with its keys merely disabled, because a disabled key is
-    // still a `KeypadKeyView`. Adding a press back is not available — a tap
-    // needs a target — and a tap-if-present would be the same vacuous line in
-    // a different shape.
     testWidgets('and with a cell selected, opening it leaves no key at all',
         (WidgetTester tester) async {
       await _pump(tester);
@@ -435,9 +436,6 @@ void main() {
     });
 
     testWidgets('does not erase what was entered', (WidgetTester tester) async {
-      // *Tablero tapado, no borrado.* The entry is the `State`'s and pausing
-      // only changes what is drawn, which is the whole reason this is one
-      // screen and not two routes.
       await _pump(tester);
       await _tapCell(tester, 0, 0);
       await _press(tester, '1');
@@ -445,7 +443,6 @@ void main() {
 
       await tester.tap(_labelled('Pausar'));
       await tester.pumpAndSettle();
-      // One of nine cells is the player's work, reported as a count.
       expect(find.text('1'), findsOneWidget);
       expect(find.text('DE 9 CELDAS'), findsOneWidget);
 
@@ -471,11 +468,6 @@ void main() {
   });
 
   group('a cage is drawn in its own format\'s outline', () {
-    // The defect: both call sites named `DashSpec.kenKenCage` themselves, so
-    // Killer — which routes through the same widget — drew KenKen's `6 4`
-    // dash. `DashSpec.killerCage` reached no screen, and the only test that
-    // read its round cap read a constant rather than a painter. Measured here
-    // before the fix: `6.0 on / 4.0 off, butt cap`.
     testWidgets('a KenKen board draws the KenKen dash',
         (WidgetTester tester) async {
       await _pumpPuzzle(tester, _puzzle());

@@ -32,8 +32,7 @@ void main() {
       expect(containsWord(_grid, 'AMUS'), isTrue, reason: 'the same run, backwards');
     });
 
-    test('down', () {
-      // C-E-R-O reads down column 0 from row 1.
+    test('down, the way C-E-R-O reads from row 1 of column 0', () {
       expect(containsWord(_grid, 'CERO'), isTrue);
     });
 
@@ -41,9 +40,8 @@ void main() {
       expect(containsWord(_grid, 'OREC'), isTrue);
     });
 
-    test('each of the eight directions in turn', () {
-      // A grid accepting only the directions its author happened to use would
-      // refuse a correct answer, so every direction is placed and found.
+    test('each of the eight directions in turn, so a word written in one the '
+        'author did not happen to use is not refused', () {
       const List<String> plain = <String>['ABC', 'DEF', 'GHI'];
       const Map<String, String> byDirection = <String, String>{
         'along': 'ABC',
@@ -66,8 +64,6 @@ void main() {
     });
 
     test('a word running off the edge does not wrap or truncate', () {
-      // `SUMAX` fills row 0. One more letter would run off, and must not wrap
-      // to the next row or match the prefix.
       expect(containsWord(_grid, 'SUMAXC'), isFalse);
       expect(containsWord(<String>['AB', 'CD'], 'ABC'), isFalse);
     });
@@ -84,8 +80,8 @@ void main() {
       expect(after.found, contains('SUMA'));
     });
 
-    test('traced backwards is the same word', () {
-      // Which end a player started from is not part of the puzzle.
+    test('traced backwards is the same word, because which end a player '
+        'started from is not part of the puzzle', () {
       final WordSearchProgress after =
           WordSearchProgress(puzzle: _puzzle()).claim(_line(0, 3, 0, -1, 4));
       expect(after.found, contains('SUMA'));
@@ -103,7 +99,6 @@ void main() {
     });
 
     test('a trace with a gap claims nothing', () {
-      // A "line" of distant cells is a selection with holes.
       final WordSearchProgress after = WordSearchProgress(puzzle: _puzzle()).claim(
         <Cell>[const Cell(row: 0, col: 0), const Cell(row: 0, col: 2)],
       );

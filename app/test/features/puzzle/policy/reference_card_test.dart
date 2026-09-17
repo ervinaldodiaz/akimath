@@ -1,14 +1,32 @@
-import 'package:akimath_app/content/model/puzzle.dart';
-import 'package:akimath_app/design/puzzle/spec/cage_outline.dart';
-import 'package:akimath_app/features/puzzle/policy/reference_card.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 /// What the card shows, decided without a widget.
 ///
 /// The rule text is the pack's and the diagram beside it is ours, so the one
 /// thing worth proving is that the two are paired without either being able to
 /// invent the other — a line the pack did not carry, or a diagram drawn beside
-/// nothing.
+/// nothing. How long the sheet is stays the pack's call too.
+///
+/// **The vocabulary line** is where a format names the thing on its board, so
+/// it is the one place two formats must not show the same picture — and a cage
+/// is a dashed outline, which is the whole point of drawing one beside the line
+/// that first says the word.
+///
+/// **Every format is covered, which is PROC-10 in miniature.** A format whose
+/// diagrams nobody wrote would show a card of bare text and no test would say
+/// so.
+///
+/// **A diagram's cage and its outline travel together by sweep, not by
+/// assert.** A `const` constructor cannot check `isEmpty` — it is not a
+/// constant expression — and an assert would be stripped in release anyway
+/// (TYP-2). A diagram with cells and no outline would draw nothing; one with an
+/// outline and no cells would name a picture that is not there. The defect
+/// behind that pairing: both cage diagrams drew `DashSpec.kenKenCage`, so the
+/// picture beside Killer's rule taught KenKen's outline.
+library;
+
+import 'package:akimath_app/content/model/puzzle.dart';
+import 'package:akimath_app/design/puzzle/spec/cage_outline.dart';
+import 'package:akimath_app/features/puzzle/policy/reference_card.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const List<List<int>> _threeByThree = <List<int>>[
   <int>[1, 2, 3],
@@ -72,21 +90,15 @@ void main() {
         _kakuro(<String>['a', 'b', 'c']),
       );
 
-      // The vocabulary line is where a format names the thing on its board, so
-      // it is the one place two formats must not show the same picture.
       expect(kenKen[1].diagram, isNotNull);
       expect(kakuro[1].diagram, isNotNull);
       expect(kenKen[1].diagram, isNot(kakuro[1].diagram));
 
-      // A cage is a dashed outline, and that is the whole point of drawing one
-      // beside the line that first says the word.
       expect(kenKen[1].diagram!.cage, isNotEmpty);
       expect(kakuro[1].diagram!.cage, isEmpty);
     });
 
     test('give a line the pack added no diagram rather than borrowing one', () {
-      // The sheet is the pack's and this code does not get to decide how long
-      // it is. A fourth line is text with nothing beside it.
       final List<ReferenceRow> rows = referenceRows(
         _kenKen(<String>['a', 'b', 'c', 'd']),
       );
@@ -107,8 +119,6 @@ void main() {
     });
 
     test('cover every format, so a diagram list is never silently absent', () {
-      // PROC-10 in miniature: a format whose diagrams nobody wrote would show a
-      // card of bare text and no test would say so.
       for (final Puzzle puzzle in <Puzzle>[
         _kenKen(<String>['a', 'b', 'c']),
         KillerPuzzle(
@@ -169,9 +179,8 @@ void main() {
   });
 
   group('a diagram', () {
-    test('never places a mark outside the grid it declares', () {
-      // Every index is `row * size + column`, and an index past the last cell
-      // would be dropped in silence by the widget that reads it.
+    test('never places a mark outside the grid it declares, where the widget '
+        'reading `row * size + column` would drop it in silence', () {
       for (final ReferenceDiagram diagram in allReferenceDiagrams) {
         final int cells = diagram.size * diagram.size;
         expect(diagram.size, greaterThan(0));
@@ -196,11 +205,6 @@ void main() {
     });
 
     test('draws its cage in an outline, and only when it has a cage', () {
-      // The invariant a `const` constructor cannot assert: `isEmpty` is not a
-      // constant expression — and an assert would be stripped in release
-      // anyway (TYP-2). A diagram with cells and no outline would draw
-      // nothing; one with an outline and no cells would name a picture that is
-      // not there.
       expect(allReferenceDiagrams, isNotEmpty);
 
       for (final ReferenceDiagram diagram in allReferenceDiagrams) {
@@ -214,8 +218,6 @@ void main() {
     });
 
     test('a Killer rule is pictured with the Killer cage, not KenKen\'s', () {
-      // Both cage diagrams drew `DashSpec.kenKenCage`, so the picture beside
-      // Killer's rule taught KenKen's outline.
       const List<String> sheet = <String>[
         'Llena cada casilla.',
         'La jaula dice el resultado.',

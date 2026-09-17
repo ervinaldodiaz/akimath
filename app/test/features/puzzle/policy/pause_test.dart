@@ -1,3 +1,13 @@
+/// What a paused board says about itself, decided without a widget.
+///
+/// **It reads as a count and never as a clock.**
+/// `quiet_while_you_solve_test.dart` forbids anything that reads as a clock on
+/// a solving surface, and a paused board is mid-solve — the design draws
+/// `Pausa` with a cell count and a format name and no elapsed time at all. The
+/// last case holds the *type* to it: there is nowhere in `PauseSummary` to put
+/// a duration.
+library;
+
 import 'package:akimath_app/content/model/puzzle.dart';
 import 'package:akimath_app/features/puzzle/policy/pause.dart';
 import 'package:akimath_app/features/puzzle/policy/puzzle_entry.dart';
@@ -37,9 +47,8 @@ void main() {
       expect(summary.total, 9);
     });
 
-    test('and a given is not one of them', () {
-      // A given is part of the question. Counting it as progress would tell a
-      // player they had done work they have not done.
+    test('and a given is not one of them: counting the question as progress '
+        'would credit a player with work they have not done', () {
       final Set<Cell> given = <Cell>{const Cell(row: 0, col: 0)};
       final PuzzleEntry entry = PuzzleEntry.of(_board(given: given));
 
@@ -58,10 +67,6 @@ void main() {
     });
 
     test('reads as a count and never as a clock', () {
-      // `quiet_while_you_solve_test` forbids anything that reads as a clock on
-      // a solving surface, and a paused board is mid-solve — the design draws
-      // Pausa with a cell count and a format and no elapsed time at all. This
-      // holds the type to it: there is nowhere to put a duration.
       final PauseSummary summary =
           pauseSummary(_kenKen(), PuzzleEntry.of(_board()));
 

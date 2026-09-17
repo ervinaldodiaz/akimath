@@ -76,17 +76,23 @@ class ReferenceCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: BrandShape.space2),
-        // **Labelled**, because a glyph-only control says nothing to a screen
-        // reader — the same rule the board's own way out follows.
-        Semantics(
-          label: 'Cerrar la hoja',
-          button: true,
-          child: IconButtonTile(
-            onPressed: onClose,
-            child: const BrandIcon(BrandGlyph.close, size: 18),
-          ),
-        ),
+        _closeControl(),
       ],
+    );
+  }
+
+  /// The way out in the corner of the card.
+  ///
+  /// **Labelled**, because a glyph-only control says nothing to a screen reader
+  /// — the same rule the board's own way out follows.
+  Widget _closeControl() {
+    return Semantics(
+      label: 'Cerrar la hoja',
+      button: true,
+      child: IconButtonTile(
+        onPressed: onClose,
+        child: const BrandIcon(BrandGlyph.close, size: 18),
+      ),
     );
   }
 }
@@ -109,19 +115,21 @@ class _RuleRow extends StatelessWidget {
             ReferenceDiagramView(diagram: diagram),
             const SizedBox(width: BrandShape.space3),
           ],
-          Expanded(
-            child: Text(
-              row.text,
-              // Ink rather than `caption`'s muted default: this is the content
-              // of the card, not a note beside it.
-              style: BrandText.caption(
-                size: 14,
-                color: BrandColors.ink,
-                height: 1.45,
-              ),
-            ),
-          ),
+          Expanded(child: _words()),
         ],
+      ),
+    );
+  }
+
+  /// The rule itself, in ink rather than `caption`'s muted default: this is the
+  /// content of the card, not a note beside it.
+  Widget _words() {
+    return Text(
+      row.text,
+      style: BrandText.caption(
+        size: 14,
+        color: BrandColors.ink,
+        height: 1.45,
       ),
     );
   }
@@ -193,6 +201,11 @@ class ReferenceDiagramView extends StatelessWidget {
   }
 }
 
+/// One cell of a miniature.
+///
+/// It takes **the board's own cell fills** from `resolvePuzzleCell`, so the
+/// picture and the thing it is about are the same colours — a diagram that
+/// invented its own would be teaching a board the player is not looking at.
 class _DiagramCell extends StatelessWidget {
   const _DiagramCell({
     required this.diagram,
@@ -212,15 +225,24 @@ class _DiagramCell extends StatelessWidget {
     return PuzzleCellKind.open;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // The board's own cell fills, so the picture and the thing it is about are
-    // the same colours — a diagram that invented its own would be teaching a
-    // board the player is not looking at.
-    final PuzzleCellVisual visual = resolvePuzzleCell(_kind, selected: false);
-    final String? label = diagram.labels[index];
+  /// The cage boundary crossing this cell, where one does.
+  ///
+  /// The diagram's own format, stepped down to the hairline it rules its cells
+  /// with — the picture teaches the board the player is looking at, so a KenKen
+  /// rule shows KenKen's dash and a Killer rule shows the dots.
+  CustomPainter? _cageBoundary() {
     final CageEdges? boundary = edges;
     final CageOutline? cage = diagram.cageOutline;
+    if (boundary == null || cage == null) {
+      return null;
+    }
+    return CageEdgePainter(edges: boundary, outline: cage.miniature);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final PuzzleCellVisual visual = resolvePuzzleCell(_kind, selected: false);
+    final String? label = diagram.labels[index];
     final String? cageLabel = diagram.cageLabel;
 
     return DecoratedBox(
@@ -232,12 +254,7 @@ class _DiagramCell extends StatelessWidget {
         ),
       ),
       child: CustomPaint(
-        // The diagram's own format, stepped down to the hairline it rules its
-        // cells with — the picture teaches the board the player is looking at,
-        // so a KenKen rule shows KenKen's dash and a Killer rule shows the dots.
-        foregroundPainter: boundary == null || cage == null
-            ? null
-            : CageEdgePainter(edges: boundary, outline: cage.miniature),
+        foregroundPainter: _cageBoundary(),
         child: Stack(
           children: <Widget>[
             if (label != null)

@@ -76,9 +76,6 @@ void main() {
 
     testWidgets('a trace that spells nothing is not practice',
         (WidgetTester tester) async {
-      // Design D2: this is the word search's analogue of a gesture that was
-      // never submitted, not of a wrong answer — the player has asserted
-      // nothing about the puzzle.
       final int Function() practised = await _pumpCountingPractice(tester);
 
       await _trace(tester, <String>['S', 'C', 'E', 'R', 'O']);
@@ -91,9 +88,9 @@ void main() {
 
 
   group('the screen shows a grid and a list', () {
-    testWidgets('every letter is drawn', (WidgetTester tester) async {
+    testWidgets('every letter is drawn, read off two that appear nowhere in '
+        'the word list', (WidgetTester tester) async {
       await _pump(tester);
-      // Twenty-five cells. `S` appears once in the grid and once in `SUMA`.
       expect(find.text('X'), findsOneWidget);
       expect(find.text('T'), findsOneWidget);
     });
@@ -106,9 +103,9 @@ void main() {
   });
 
   group('nothing is typed here', () {
-    testWidgets('there is no keypad', (WidgetTester tester) async {
-      // This puzzle takes no digits, so the pad every other board carries
-      // would be a control with nothing to do.
+    testWidgets('there is no keypad, since a pad on a puzzle that takes no '
+        'digits is a control with nothing to do',
+        (WidgetTester tester) async {
       await _pump(tester);
       expect(find.byType(Keypad), findsNothing);
       expect(find.byType(KeypadKeyView), findsNothing);
@@ -117,8 +114,6 @@ void main() {
 
   group('a word is claimed by dragging across it', () {
     testWidgets('the found word is struck through', (WidgetTester tester) async {
-      // BRD-1: dimming alone is a hue difference. A line through the word
-      // survives with the hue gone.
       await _pump(tester);
       expect(_decorationOf(tester, 'SUMA'), TextDecoration.none);
 
@@ -129,9 +124,8 @@ void main() {
           reason: 'claiming one word must not strike the other');
     });
 
-    testWidgets('a line that spells nothing claims nothing',
-        (WidgetTester tester) async {
-      // Down the first column: S-C-E-R-O, which is not a word in the list.
+    testWidgets('a line that spells nothing claims nothing, as S-C-E-R-O down '
+        'the first column does not', (WidgetTester tester) async {
       await _pump(tester);
       await _trace(tester, <String>['S', 'C', 'E', 'R', 'O']);
 
@@ -139,20 +133,17 @@ void main() {
       expect(_decorationOf(tester, 'CERO'), TextDecoration.none);
     });
 
-    testWidgets('a word read backwards counts', (WidgetTester tester) async {
-      // A player who starts at the end of a word has found it just the same,
-      // and asking them to guess the author's direction is a puzzle about the
-      // interface.
+    testWidgets('a word read backwards counts, so nobody has to guess the '
+        'author\'s direction', (WidgetTester tester) async {
       await _pump(tester);
       await _trace(tester, <String>['A', 'M', 'U', 'S']);
 
       expect(_decorationOf(tester, 'SUMA'), TextDecoration.lineThrough);
     });
 
-    testWidgets('a drag that leaves the grid claims nothing',
+    testWidgets('a drag that leaves the grid claims nothing, because letterAt '
+        'answers null outside rather than the nearest cell',
         (WidgetTester tester) async {
-      // `letterAt` returns null outside rather than the nearest cell, so
-      // sweeping off the side cannot complete a word.
       await _pump(tester);
 
       final Offset start = tester.getCenter(find.text('S'));
@@ -181,7 +172,6 @@ void main() {
       await _trace(tester, <String>['S', 'U', 'M', 'A']);
       expect(solved, 0, reason: 'one word of two is not solved');
 
-      // CERO reads down the first column from row 1.
       await _trace(tester, <String>['C', 'E', 'R', 'O']);
       expect(solved, 1);
     });

@@ -1,3 +1,14 @@
+/// `Hoja de referencia` on screen.
+///
+/// **Two ways back is the design's, not an accident**: the corner is where a
+/// reader's hand already is and the button is where their eye ends up, so both
+/// report the same way out to the same caller.
+///
+/// **The band of rules scrolls rather than the card growing.** The frozen
+/// schema admits six lines and the card is drawn for three, so a player at
+/// `textScaler` 1.3 on a small phone is the case that overflows.
+library;
+
 import 'package:akimath_app/content/model/puzzle.dart';
 import 'package:akimath_app/design/theme.dart';
 import 'package:akimath_app/features/puzzle/ui/reference_card.dart';
@@ -70,8 +81,6 @@ void main() {
       for (final String line in _puzzle().referenceSheet) {
         expect(find.text(line), findsOneWidget);
       }
-      // Whatever else is on the card is a heading or a control, never a rule
-      // this file wrote.
       expect(
         find.textContaining('jaula').evaluate().length,
         1,
@@ -98,8 +107,6 @@ void main() {
     });
 
     testWidgets('closes from the corner control', (WidgetTester tester) async {
-      // Two ways back is the design's, not an accident: the corner is where a
-      // reader's hand already is and the button is where their eye ends up.
       await _pump(tester);
       await tester.tap(_labelled('Cerrar la hoja'));
       await tester.pumpAndSettle();
@@ -141,9 +148,6 @@ void main() {
 
     testWidgets('survives a sheet with more text than the card is tall',
         (WidgetTester tester) async {
-      // The frozen schema admits six lines and the card is drawn for three.
-      // A player at textScaler 1.3 on a small phone is the case that overflows,
-      // so the rules band scrolls rather than the card growing.
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);

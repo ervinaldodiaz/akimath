@@ -1,3 +1,16 @@
+/// `Puzzle resuelto`: what a finished board says, and what it refuses to say.
+///
+/// **A long sitting reads as minutes, not as a pile of seconds.** The verdict
+/// screens print `4,2 s`, which is right for a reaction; an hour of Kakuro in
+/// the same format is `3 849,0 s` — a number nobody can take in, and one that
+/// overflows the tile at `textScaler` 1.3.
+///
+/// **There is no verdict mark, and that is BRD-1 rather than an omission.**
+/// That rule asks a *pair* to be distinguishable by shape. A puzzle has no
+/// wrong ending, so there is no pair, and a ring here would be a mark with
+/// nothing to contrast against.
+library;
+
 import 'package:akimath_app/design/widgets/stat_tile.dart';
 import 'package:akimath_app/design/widgets/verdict_ring.dart';
 import 'package:akimath_app/features/puzzle/ui/puzzle_solved_screen.dart';
@@ -37,9 +50,8 @@ List<String> _copy(WidgetTester tester) => tester
 
 void main() {
   group('it says what was finished', () {
-    testWidgets('the format is named', (WidgetTester tester) async {
-      // Five formats are reachable from one home, so "you finished a puzzle"
-      // does not tell a player which one they beat.
+    testWidgets('the format is named, since five of them are reachable from '
+        'one home', (WidgetTester tester) async {
       await _pump(tester, format: 'Sopa de letras');
       expect(find.text('Sopa de letras'), findsOneWidget);
     });
@@ -71,10 +83,8 @@ void main() {
       expect(find.text('5'), findsOneWidget);
     });
 
-    testWidgets('no rating, accuracy or comparison',
-        (WidgetTester tester) async {
-      // F3 has no sync, so a figure here could be contradicted later — the
-      // same reason the verdict screens carry two tiles and not three.
+    testWidgets('no rating, accuracy or comparison, because F3 has no sync to '
+        'contradict them later', (WidgetTester tester) async {
       await _pump(tester);
       final String all = _copy(tester).join(' ').toLowerCase();
 
@@ -92,9 +102,6 @@ void main() {
 
     testWidgets('a long sitting reads as minutes, not as a pile of seconds',
         (WidgetTester tester) async {
-      // The verdict screens print `4,2 s`, which is right for a reaction. An
-      // hour of Kakuro in the same format is `3 849,0 s` — a number nobody can
-      // take in, and one that overflows the tile at `textScaler` 1.3.
       await _pump(tester, elapsed: const Duration(minutes: 21, seconds: 7));
 
       expect(find.text('21:07'), findsOneWidget);
@@ -110,9 +117,6 @@ void main() {
 
   group('one state carries no hue', () {
     testWidgets('there is no verdict mark', (WidgetTester tester) async {
-      // BRD-1 asks that a *pair* be distinguishable by shape. A puzzle has no
-      // wrong ending, so there is no pair and a ring here would be a mark with
-      // nothing to contrast against.
       await _pump(tester);
       expect(find.byType(VerdictRing), findsNothing);
     });

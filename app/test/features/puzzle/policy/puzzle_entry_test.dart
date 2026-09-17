@@ -1,3 +1,16 @@
+/// A board's entry — what a tap and a digit mean — decided without a widget.
+///
+/// **The domain is the board's own, not its size.** Deriving it from the size
+/// is the assumption two caged formats hid: it refuses 4 through 9, every digit
+/// above the third, which is most of what a magic square is made of.
+///
+/// **It says nothing about which cell is wrong** (design D4). A grid that
+/// flagged each mistake as it was made would let a player brute-force it one
+/// digit at a time, and the solution is on the device only so that grading
+/// works offline — so a wrong value comes back as entered, neither corrected
+/// nor marked.
+library;
+
 import 'package:akimath_app/content/model/puzzle.dart';
 import 'package:akimath_app/features/puzzle/policy/puzzle_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,9 +71,8 @@ void main() {
       expect(entry.filled, isEmpty);
     });
 
-    test('a digit with nothing selected changes nothing', () {
-      // Worse than doing nothing would be landing somewhere the player is not
-      // looking.
+    test('a digit with nothing selected changes nothing, rather than landing '
+        'somewhere the player is not looking', () {
       final PuzzleEntry entry = PuzzleEntry.of(_board()).type(2);
       expect(entry.filled, isEmpty);
       expect(entry.selected, isNull);
@@ -86,9 +98,6 @@ void main() {
         );
 
     test('a magic square accepts every digit up to nine', () {
-      // The assumption two caged formats hid. Deriving the domain from the
-      // board's size refuses 4 through 9 — every digit above the third, which
-      // is most of what a magic square is made of.
       for (final int value in <int>[1, 5, 7, 9]) {
         final PuzzleEntry entry = PuzzleEntry.of(magic())
             .select(const Cell(row: 0, col: 0))
@@ -104,9 +113,8 @@ void main() {
       expect(entry.filled, isEmpty);
     });
 
-    test('a caged board of the same size still stops at three', () {
-      // Both formats are 3×3; only the domain differs, which is the whole
-      // point of declaring it.
+    test('a caged board of the same size still stops at three, since only the '
+        'domain differs', () {
       final PuzzleEntry entry = PuzzleEntry.of(_board())
           .select(const Cell(row: 0, col: 0))
           .type(7);
@@ -123,9 +131,8 @@ void main() {
   });
 
   group('only a value the board could hold is accepted', () {
-    test('a digit outside the domain is refused', () {
-      // A 3×3 holds 1 to 3. No solution can contain a 4, so entering one is
-      // not a wrong answer — it is not an answer.
+    test('a digit outside the domain is refused, because it is not a wrong '
+        'answer but no answer at all', () {
       for (final int value in <int>[0, -1, 4, 9]) {
         final PuzzleEntry entry = PuzzleEntry.of(_board())
             .select(const Cell(row: 0, col: 0))
@@ -134,9 +141,8 @@ void main() {
       }
     });
 
-    test('every digit inside the domain is accepted', () {
-      // The other side: a check that refused everything would satisfy the test
-      // above perfectly.
+    test('every digit inside the domain is accepted, so a check that refused '
+        'everything is not enough', () {
       for (final int value in <int>[1, 2, 3]) {
         final PuzzleEntry entry = PuzzleEntry.of(_board())
             .select(const Cell(row: 0, col: 0))
@@ -186,9 +192,8 @@ void main() {
       expect(_solve(PuzzleEntry.of(_board())).isSolved, isTrue);
     });
 
-    test('full but one wrong is not solved', () {
-      // The case that separates the two questions. A board that reported itself
-      // done when full would be graded by the player.
+    test('full but one wrong is not solved, or the player would be grading '
+        'the board', () {
       final PuzzleEntry entry = _solve(PuzzleEntry.of(_board()))
           .select(const Cell(row: 2, col: 2))
           .type(1);
@@ -205,9 +210,8 @@ void main() {
       expect(entry.isSolved, isFalse);
     });
 
-    test('a board of only givens is solved before it starts', () {
-      // Degenerate, and worth pinning: `every` over an empty list is true, and
-      // that is the right answer here rather than an accident to guard against.
+    test('a board of only givens is solved before it starts, which is the '
+        'right answer and not an accident to guard against', () {
       final PuzzleBoard board = _board(given: <Cell>{
         for (int row = 0; row < 3; row++)
           for (int col = 0; col < 3; col++) Cell(row: row, col: col),
@@ -223,14 +227,10 @@ void main() {
 
   group('it says nothing about which cell is wrong', () {
     test('the entry exposes no per-cell verdict', () {
-      // Design D4. A grid that flagged each mistake as it was made would let a
-      // player brute-force it one digit at a time, and the solution is on the
-      // device only so grading works offline.
       final PuzzleEntry wrong = PuzzleEntry.of(_board())
           .select(const Cell(row: 0, col: 0))
           .type(3);
 
-      // The value comes back as entered — not corrected, not marked.
       expect(wrong.valueAt(const Cell(row: 0, col: 0)), 3);
       expect(wrong.isSolved, isFalse);
     });
