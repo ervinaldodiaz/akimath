@@ -22,9 +22,8 @@ void main() {
       expect(await const OnboardingStore().isComplete(), isTrue);
     });
 
-    test('a new store over the same storage sees it', () async {
-      // Two instances over one backend is what a relaunch looks like from the
-      // adapter's side.
+    test('a second store over one backend sees it, which is what a relaunch is',
+        () async {
       await const OnboardingStore().markComplete();
       expect(await const OnboardingStore().isComplete(), isTrue);
     });
@@ -40,9 +39,6 @@ void main() {
 
   group('storage that cannot be read shows the onboarding', () {
     test('an absent flag reads as not complete', () async {
-      // The alternative — assume completed — skips the only screen that teaches
-      // the answer format, for a player who may never have seen it. Showing it
-      // twice costs seconds; skipping it costs the explanation.
       expect(await const OnboardingStore().isComplete(), isFalse);
     });
 
@@ -59,8 +55,6 @@ void main() {
     });
 
     test('it stores no version, deliberately', () async {
-      // A version whose semantics nobody has decided is a decision taken by
-      // default. A key rename does the same job the day it is wanted.
       expect(OnboardingStore.key, isNot(contains('version')));
       await const OnboardingStore().markComplete();
       expect((await SharedPreferencesAsync().getKeys()), hasLength(1));

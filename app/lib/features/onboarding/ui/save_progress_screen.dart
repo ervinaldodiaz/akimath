@@ -101,6 +101,10 @@ class SaveProgressScreen extends StatelessWidget {
   /// a day — so a first-time player sees a single full-width `RETOS`, and a
   /// player who reaches this screen with days behind them sees two.
   ///
+  /// At zero days the tile is **absent, not a tile reading zero** — the same
+  /// reading as `HISTORIAL` with nothing in it, and the figure shown has to be
+  /// the figure the store will yield one tap later.
+  ///
   /// The day tile is **yellow**, which is what the design fills; the filled
   /// tile is the one the screen is about, the same hierarchy `4.1` draws
   /// between its two headline cards.
@@ -115,10 +119,6 @@ class SaveProgressScreen extends StatelessWidget {
                 background: BrandColors.surface,
               ),
             ),
-            // **Absent at zero, not a tile reading zero.** Nothing in the
-            // first run records a day, so the home behind this screen reads
-            // none — and a figure contradicted one tap later is the `RACHA 1`
-            // defect. The same reading as `HISTORIAL` with nothing in it.
             if (days > 0) ...<Widget>[
               const SizedBox(width: BrandShape.space2),
               Expanded(
@@ -133,6 +133,11 @@ class SaveProgressScreen extends StatelessWidget {
         ),
       );
 
+  /// One tile, in the design's raised treatment.
+  ///
+  /// On the filled tile the muted eyebrow loses its contrast, so the label
+  /// takes the ink the design gives it there — the same reading `4.1`'s
+  /// headline pair already makes.
   Widget _tile({
     required String label,
     required String value,
@@ -159,9 +164,6 @@ class SaveProgressScreen extends StatelessWidget {
               child: Text(
                 label,
                 style: BrandText.eyebrow(
-                  // On the filled tile the muted eyebrow loses its contrast, so
-                  // it takes the ink the design gives it there — the same
-                  // reading `4.1`'s headline pair already makes.
                   color: background == BrandColors.surface
                       ? BrandColors.muted
                       : BrandColors.ink,

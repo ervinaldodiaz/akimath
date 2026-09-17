@@ -83,6 +83,15 @@ class CalibrationItemScreen extends StatefulWidget {
 }
 
 class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
+  /// Tighter vertically than the round's `space3`: this screen carries a strip
+  /// and a caption the round does not, and at `textScaler` 1.3 on the notched
+  /// phone the overflow gate reported 18 pixels for them.
+  static const EdgeInsets _paddingThatFitsTheStripAndItsCaption =
+      EdgeInsets.symmetric(
+    horizontal: BrandShape.space4,
+    vertical: BrandShape.space2,
+  );
+
   /// How many items are behind the player. Also how many bars are filled.
   int _index = 0;
   int _correct = 0;
@@ -136,14 +145,16 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
   /// **The last answer does not advance the index.** Reporting is the caller's
   /// cue to replace this screen, and an index one past the end would be a
   /// `RangeError` in whatever frame ran first.
+  ///
+  /// **[CalibrationItemScreen.onGraded] fires before the early return that ends
+  /// the probe.** Ending the probe is not a reason to drop the answer that
+  /// ended it.
   void _submit() {
     final DateTime finishedAt = widget.now();
     final Verdict verdict = gradeItem(_item, _draft.text);
     if (verdict == Verdict.correct) {
       _correct += 1;
     }
-    // **Reported before the early return below.** Ending the probe is not a
-    // reason to drop the answer that ended it.
     widget.onGraded?.call(verdict, finishedAt.difference(_itemStartedAt));
     if (_index == widget.items.length - 1) {
       _report(answered: widget.items.length, at: finishedAt);
@@ -169,16 +180,13 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
         ),
       );
 
+  /// The screen, under a `PopScope` that makes **a system back mean what
+  /// `Saltar` means** — the same agreement the teaching item's `PopScope`
+  /// makes. The probe is swapped in rather than pushed, so without it an
+  /// Android back would quit the app from the middle of the first run.
   @override
   Widget build(BuildContext context) {
-    // Scaffold rather than a bare `ColoredBox`, for the same reason the round
-    // has one: without a Material ancestor every run of text gets Flutter's
-    // yellow debug underline, and `screen_text_style_test.dart` fails on it.
     return PopScope(
-      // **A system back means what `Saltar` means**, the same agreement the
-      // teaching item's `PopScope` makes. The probe is swapped in rather than
-      // pushed, so without this an Android back would quit the app from the
-      // middle of the first run.
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (!didPop) {
@@ -189,18 +197,18 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
     );
   }
 
+  /// Everything the player sees, on a `Scaffold`.
+  ///
+  /// A `Scaffold` rather than a bare `ColoredBox`, for the same reason the
+  /// round has one: without a Material ancestor every run of text gets
+  /// Flutter's yellow debug underline, and `screen_text_style_test.dart` fails
+  /// on it.
   Widget _screen() {
     return Scaffold(
       backgroundColor: BrandColors.cream,
       body: SafeArea(
         child: Padding(
-          // Tighter than the round's `space3`: this screen carries a strip
-          // and a caption the round does not, and at `textScaler` 1.3 on the
-          // notched phone the overflow gate reported 18 pixels for them.
-          padding: const EdgeInsets.symmetric(
-            horizontal: BrandShape.space4,
-            vertical: BrandShape.space2,
-          ),
+          padding: _paddingThatFitsTheStripAndItsCaption,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -243,6 +251,10 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
   /// **The count, not a clock.** Nothing on a solving surface may read as one
   /// (`quiet_while_you_solve_test.dart`), and *"how many are left"* is the one
   /// number that tells a player where they are without timing them.
+  ///
+  /// The count is set in the accent, which is what the design sets this line
+  /// in. It is not a verdict colour and could not be: `BrandColorRole` has no
+  /// arm that would let it be one here.
   Widget _header() => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -253,9 +265,6 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: BrandText.eyebrow(
-                // The accent, which is what the design sets this line in. It is
-                // not a verdict colour and could not be: `BrandColorRole` has
-                // no arm that would let it be one here.
                 color: BrandColorRole.accent.color,
                 size: 11,
               ),
@@ -271,12 +280,13 @@ class _CalibrationItemScreenState extends State<CalibrationItemScreen> {
   /// The shared thing wants to be a widget under `design/widgets/`, which this
   /// change was scoped out of touching. Extracting it is the follow-up, and
   /// until it happens the two are one review away from drifting.
+  ///
+  /// **Pink dashed: a focus affordance, never a verdict.** A probe has no
+  /// verdict state at all, which makes that easy to keep true here.
   Widget _answerSlot() => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           CandySurface(
-            // Pink dashed: a focus affordance, never a verdict. A probe has no
-            // verdict state at all, which makes that easy to keep true here.
             borderDash: DashSpec.locked,
             borderColor: BrandColorRole.focus.color,
             borderWidth: BrandShape.borderWidth,

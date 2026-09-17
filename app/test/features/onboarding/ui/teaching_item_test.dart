@@ -1,3 +1,18 @@
+/// The `7 + 6` collision gate: a Tier 2 finding turned into a red build.
+///
+/// The teaching item **was** `7 + 6`, which is `add-1` — the starter pack's
+/// *first* item, and so both what the home previews as `RETO DEL DÍA` and what
+/// `Empezar la serie` opens with. A new player solved it in the tutorial and
+/// then met it twice on the very next screen.
+///
+/// Nothing in the suite could see it: `FirstItemScreen` is handed its item in
+/// every test and the home tests are handed a fixture, so the two never met.
+/// Reading the **real** pack is what closes that gap — and it means editing
+/// `assets/packs/starter.json` to add a `5 + 8` fails here rather than shipping
+/// the repeat back. `policy/calibration_test.dart` guards the probe's end of
+/// the same rule, because the probe takes the pack's first ten.
+library;
+
 import 'package:akimath_app/content/model/item.dart';
 import 'package:akimath_app/content/model/pack.dart';
 import 'package:akimath_app/content/pack_reader.dart';
@@ -41,17 +56,6 @@ void main() {
 
   group('the teaching item is not an item the player is about to meet', () {
     test('no item in the shipped pack has its prompt', () async {
-      // **This is a Tier 2 finding turned into a gate.** The teaching item was
-      // `7 + 6`, which is `add-1` — the starter pack's *first* item, and so both
-      // what the home previews as `RETO DEL DÍA` and what `Empezar la serie`
-      // opens with. A new player solved it in the tutorial and then met it twice
-      // on the very next screen.
-      //
-      // Nothing in the suite could see it: this screen is handed its item and
-      // the home tests are handed a fixture, so the two never met. Reading the
-      // real pack is what closes that gap — and it means editing
-      // `assets/packs/starter.json` to add a `5 + 8` fails here rather than
-      // shipping the repeat back.
       final Pack pack = await const PackReader().load();
 
       expect(
@@ -64,8 +68,6 @@ void main() {
 
     test('it reports what it compared, and comparing nothing is a failure',
         () async {
-      // PROC-10. A pack that read as empty would make the assertion above pass
-      // for the wrong reason.
       final Pack pack = await const PackReader().load();
 
       expect(pack.items, isNotEmpty);

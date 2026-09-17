@@ -1,3 +1,12 @@
+/// `0.6 Calibración resultado`, held to reporting only what the probe measured.
+///
+/// **`AkiPose` and the design document use different words for one pose.** The
+/// document's `base` / `fan` / `error` are aliases of the code's `base` /
+/// `correct` / `slip` (design decision D9), which is why a test named after the
+/// design's *fan* asserts `AkiPose.correct`. Nothing on `AkiPose` itself
+/// records the mapping, so it is written down here.
+library;
+
 import 'package:akimath_app/design/brand/aki.dart';
 import 'package:akimath_app/design/math/spec/es_mx_number.dart';
 import 'package:akimath_app/design/theme.dart';
@@ -53,10 +62,8 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('a different probe reports different figures',
-      (WidgetTester tester) async {
-    // The control. Without it the two above pass for a screen that prints two
-    // constants.
+  testWidgets('a different probe reports different figures, so neither is a '
+      'constant', (WidgetTester tester) async {
     await _pump(
       tester,
       outcome: const CalibrationOutcome(
@@ -73,23 +80,14 @@ void main() {
 
   testWidgets('the rating card the design draws is absent, not blank',
       (WidgetTester tester) async {
-    // `0.6` draws `RATING 1 248` under the headline and there is no rating
-    // system to fill it: rating never runs in Dart, and `GET /me/standing`
-    // answers one *per skill*, so no single number is a fact about a player.
-    // It was an invented constant until 2026-09-02. Absent rather than a dash
-    // or a zero (DR-P2) — a card with nothing in it promises a figure that has
-    // no date on it.
     await _pump(tester);
 
     expect(find.textContaining('RATING'), findsNothing);
     expect(find.text('AQUÍ EMPIEZAS'), findsOneWidget);
   });
 
-  testWidgets('and the two figures under it are still the measured ones',
-      (WidgetTester tester) async {
-    // The control for the assertion above: a screen that drew nothing at all
-    // would satisfy it. `_sixOfTen` answered six of ten in 2:14, and both
-    // figures came off the device.
+  testWidgets('and the measured figures are still drawn, so "absent" is not '
+      '"an empty screen"', (WidgetTester tester) async {
     await _pump(tester);
 
     expect(find.text('ACIERTOS'), findsOneWidget);
@@ -111,8 +109,6 @@ void main() {
 
   testWidgets('it claims no level, no rank and no place on a ladder',
       (WidgetTester tester) async {
-    // The one thing this screen must not do. A placement algorithm does not
-    // exist, so any word that reads as one would be invented.
     await _pump(tester);
 
     final Iterable<String> copy =
@@ -129,8 +125,6 @@ void main() {
 
   testWidgets('Aki is wagging, which is the design\'s fan',
       (WidgetTester tester) async {
-    // Design decision D9: the document's `base` / `fan` / `error` are aliases
-    // of the code's `base` / `correct` / `slip`.
     await _pump(tester);
 
     expect(tester.widget<Aki>(find.byType(Aki)).pose, AkiPose.correct);

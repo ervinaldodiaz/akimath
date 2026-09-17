@@ -27,6 +27,12 @@ List<Item> _probe(int count) => <Item>[
     ];
 
 /// The instants the screen's clock hands out, one per call.
+///
+/// **It hands the last one back for ever.** The screen reads the clock once
+/// when the probe opens and once per submit, so a test that cares only about
+/// the span of the whole probe can hand over two instants and let the rest
+/// repeat; a test that cares about *per item* durations has to supply one
+/// instant per submit and space them so no two items took the same time.
 DateTime Function() _clockOf(List<DateTime> instants) {
   int next = 0;
   return () => instants[next < instants.length ? next++ : instants.length - 1];
@@ -70,6 +76,21 @@ Future<void> _press(WidgetTester tester, String id) async {
   await tester.pump();
 }
 
+/// How many different colours the strip is drawn in.
+///
+/// The caller answers one item right and one wrong first, so a strip that
+/// leaked the verdict would return three fills rather than two — filled and
+/// empty, and nothing else.
+Set<Color?> _distinctBarFills(WidgetTester tester) => tester
+    .widgetList<Container>(
+      find.descendant(
+        of: find.byType(ProbeStrip),
+        matching: find.byType(Container),
+      ),
+    )
+    .map((Container bar) => (bar.decoration! as BoxDecoration).color)
+    .toSet();
+
 /// Types [answer] on the in-app keypad and submits it.
 Future<void> _answer(WidgetTester tester, String answer) async {
   for (final String digit in answer.split('')) {
@@ -98,8 +119,6 @@ void main() {
 
   testWidgets('answering fills a bar, advances, and shows no verdict',
       (WidgetTester tester) async {
-    // A probe is not a series: the design draws no verdict between items, and
-    // one would turn the probe into the grading `0.4` says it is not.
     await _pump(tester, items: _probe(3), onFinished: (_) {});
 
     await _answer(tester, '1');
@@ -126,10 +145,6 @@ void main() {
       tester,
       items: _probe(3),
       onFinished: (CalibrationOutcome outcome) => reported = outcome,
-      // Two instants: the probe opening and the submit that ends it. It reads
-      // the clock once per submit as well — `_clockOf` hands the last instant
-      // back for ever, so the span this asserts is still the whole probe, which
-      // is the only duration `0.6` draws.
       now: _clockOf(<DateTime>[
         DateTime.utc(2026, 8, 20, 9, 40),
         DateTime.utc(2026, 8, 20, 9, 40, 44),
@@ -183,9 +198,6 @@ void main() {
 
   testWidgets('a system back leaves the probe, and does not quit the app',
       (WidgetTester tester) async {
-    // Same shape as the teaching item's `PopScope`: the visible control and
-    // the system gesture must mean one thing. Unhandled, an Android back here
-    // would close the app in the middle of the first run.
     CalibrationOutcome? reported;
     await _pump(
       tester,
@@ -202,14 +214,8 @@ void main() {
     expect(reported?.answered, 1);
   });
 
-  testWidgets('every answered item is reported graded, with its own duration',
-      (WidgetTester tester) async {
-    // **The probe is practice, and the device's record of practice is what
-    // `4.1` divides into `ACIERTOS` and `PROMEDIO`.** The teaching item is the
-    // one first-run surface that stays out of those figures, because it teaches
-    // the app rather than measuring the player; a probe item is a real pack
-    // item graded by the same `gradeItem` the round uses, and the flow already
-    // counts it as a challenge served.
+  testWidgets('every answered item is reported graded, timed from that item '
+      'and not from the probe', (WidgetTester tester) async {
     final List<_Graded> graded = <_Graded>[];
     await _pump(
       tester,
@@ -217,10 +223,6 @@ void main() {
       onFinished: (_) {},
       onGraded: (Verdict verdict, Duration elapsed) =>
           graded.add((verdict: verdict, elapsed: elapsed)),
-      // Four instants — the probe opening, then one per submit — spaced so no
-      // two items took the same time. **That is what makes the third figure a
-      // measurement**: a screen that timed every item from the probe's start
-      // would report 2, 5 and 9 seconds here, all distinct and all wrong.
       now: _clockOf(<DateTime>[
         DateTime.utc(2026, 8, 20, 9, 40),
         DateTime.utc(2026, 8, 20, 9, 40, 2),
@@ -236,7 +238,6 @@ void main() {
     expect(graded, <_Graded>[
       (verdict: Verdict.correct, elapsed: const Duration(seconds: 2)),
       (verdict: Verdict.wrong, elapsed: const Duration(seconds: 3)),
-      // The last item ends the probe, and ending it is not a reason to drop it.
       (verdict: Verdict.correct, elapsed: const Duration(seconds: 4)),
     ]);
   });
@@ -261,9 +262,6 @@ void main() {
 
   testWidgets('the strip is one colour, so it cannot leak how you are doing',
       (WidgetTester tester) async {
-    // `0.4` promises *"No se califica"*. A green-for-right bar would break
-    // that promise and BRD-1 in the same stroke, and it is exactly the
-    // improvement somebody adds later.
     await _pump(tester, items: _probe(3), onFinished: (_) {});
 
     await _answer(tester, '1');
@@ -271,16 +269,7 @@ void main() {
 
     expect(tester.widget<ProbeStrip>(find.byType(ProbeStrip)).done, 2);
 
-    // One right, one wrong, and the two filled bars are indistinguishable.
-    final Set<Color?> fills = tester
-        .widgetList<Container>(
-          find.descendant(
-            of: find.byType(ProbeStrip),
-            matching: find.byType(Container),
-          ),
-        )
-        .map((Container bar) => (bar.decoration! as BoxDecoration).color)
-        .toSet();
+    final Set<Color?> fills = _distinctBarFills(tester);
 
     expect(fills, hasLength(2), reason: 'filled and empty, and nothing else');
     expect(fills, isNot(contains(BrandColorRole.success.color)));

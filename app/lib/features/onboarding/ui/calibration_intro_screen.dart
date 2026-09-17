@@ -55,38 +55,7 @@ class CalibrationIntroScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // **The readable half scrolls; the two controls do not.** Same
-          // treatment and same reason as `0.6`, which cleared this gate by
-          // about four percent on macOS and failed it on CI's Ubuntu. Measured
-          // here before the change: this screen overflowed at `textScaler` 1.5
-          // against a gate at 1.3, and the Linux metrics that sank `0.6` cost
-          // roughly one twentieth of that margin. Scrolling removes the ceiling
-          // rather than moving it, and keeping the buttons outside the scroll
-          // view is what stops an overflow squeezing a 62px control under the
-          // 48px floor.
-          Expanded(
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints box) =>
-                  SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: box.maxHeight),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Center(child: Aki(width: _akiWidth, semanticLabel: 'Aki')),
-                      const SizedBox(height: BrandShape.space5),
-                      _title(),
-                      const SizedBox(height: BrandShape.space4),
-                      _promise(),
-                      const SizedBox(height: BrandShape.space4),
-                      _pills(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _scrollingReadableHalf(),
           const SizedBox(height: BrandShape.space4),
           BrandButton.primary(label: 'Va, empecemos', onPressed: onStart),
           const SizedBox(height: BrandShape.space3),
@@ -95,6 +64,39 @@ class CalibrationIntroScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// Everything above the two controls, which scrolls while they do not.
+  ///
+  /// Same treatment and same reason as `0.6`, which cleared the overflow gate
+  /// by about four percent on macOS and failed it on CI's Ubuntu. Measured here
+  /// before the change: this screen overflowed at `textScaler` 1.5 against a
+  /// gate at 1.3, and the Linux metrics that sank `0.6` cost roughly one
+  /// twentieth of that margin. Scrolling removes the ceiling rather than moving
+  /// it, and keeping the buttons **outside** the scroll view is what stops an
+  /// overflow squeezing a 62px control under the 48px floor.
+  Widget _scrollingReadableHalf() => Expanded(
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints box) =>
+              SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: box.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Center(child: Aki(width: _akiWidth, semanticLabel: 'Aki')),
+                  const SizedBox(height: BrandShape.space5),
+                  _title(),
+                  const SizedBox(height: BrandShape.space4),
+                  _promise(),
+                  const SizedBox(height: BrandShape.space4),
+                  _pills(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 
   /// The headline, in the design's two lines.
   ///
@@ -124,6 +126,9 @@ class CalibrationIntroScreen extends StatelessWidget {
       );
 
   /// The two promises, as the design's chips.
+  ///
+  /// Their label takes the ink rather than the eyebrow's muted default: the
+  /// design sets these two in the same weight as the body they qualify.
   Widget _pills() => Wrap(
         alignment: WrapAlignment.center,
         spacing: BrandShape.space2,
@@ -134,8 +139,6 @@ class CalibrationIntroScreen extends StatelessWidget {
             'Se puede saltar',
           ])
             CandySurface.pill(
-              // Ink rather than the eyebrow's muted default: the design sets
-              // these two in the same weight as the body they qualify.
               child: Text(
                 promise,
                 style: BrandText.eyebrow(color: BrandColors.ink),
