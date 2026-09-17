@@ -8,7 +8,7 @@ import { INITIAL_DEVIATION, type Skill } from "./glicko.js";
  *
  * **In days, not in periods.** `ARCHITECTURE.md` §3 is explicit —
  * "`decay(prior, elapsedDays)` operates in **days**, or an inactive user never
- * decays". With the session as the rating period, a child who does not open the
+ * decays". With the session as the rating period, a player who does not open the
  * app has no periods at all, so a per-period decay would leave a year-old rating
  * looking as certain as yesterday's. Variance grows linearly with time, so the
  * day count multiplies `c²` rather than the number of sessions.

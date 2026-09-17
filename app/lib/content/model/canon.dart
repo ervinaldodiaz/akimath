@@ -165,7 +165,7 @@ CanonResult _asLearner(String raw) {
 ///
 /// The consequence was reachable through content, not just across the wire: a
 /// pack authored with `"answer": "-0/5"` passed `Pack._item`'s guard, loaded
-/// clean, and told a child typing `0/5` they were wrong, with nothing reporting
+/// clean, and told a player typing `0/5` they were wrong, with nothing reporting
 /// anything.
 ///
 /// The golden fixture did not catch it — its 19 vectors contain no `-0/n` case.

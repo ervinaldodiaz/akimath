@@ -16,7 +16,7 @@ import { retentionCutoffs } from "../retention.js";
  * Deleting attempts is safe because calibration never derives from raw rows —
  * `template_stats` is maintained on write. A test asserts those aggregates are
  * unchanged by a run, so a future path that starts deriving from raw rows
- * breaks a test rather than a child's history.
+ * breaks a test rather than a player's history.
  */
 export interface RetentionRun {
   readonly attempts: number;

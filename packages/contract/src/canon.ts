@@ -84,7 +84,7 @@ function reject(tag: RejectionTag): AnswerRejected {
 /**
  * Learner input in, the canonical answer out. Invisible characters and
  * combining marks are rejected rather than stripped: silently deleting a
- * character a child cannot see is how a wrong answer becomes a right one.
+ * character a player cannot see is how a wrong answer becomes a right one.
  */
 export function canonicalize(raw: string): CanonResult {
   if (INVISIBLE.test(raw)) {

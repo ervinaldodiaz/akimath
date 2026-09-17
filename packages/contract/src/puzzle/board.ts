@@ -61,7 +61,7 @@ export function checkBlockedCells(board: Board): PuzzleRejectionTag | null {
 
 /**
  * A given is a cell whose value is already printed on the board. It has to be
- * a cell the child can see and not one the board blanked out.
+ * a cell the player can see and not one the board blanked out.
  */
 export function checkGivenCells(board: Board): PuzzleRejectionTag | null {
   const blocked: ReadonlySet<string> = blockedKeys(board);
@@ -162,7 +162,7 @@ export interface CageCells {
 /**
  * A cage covers exactly its cells: inside the board, claimed once, and
  * together covering every fillable cell. A board whose cages leave a gap is a
- * board a child cannot finish, offline, with no way to report it.
+ * board a player cannot finish, offline, with no way to report it.
  */
 export function checkCageCoverage(
   board: Board,

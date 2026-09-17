@@ -15,9 +15,10 @@
 /// * `AkiMath Primera Vez y Cuenta.dc.html` — backspace, submit
 /// * `AkiMath Pantallas Base.dc.html` — padlock
 ///
-/// **No icon package.** The audience includes children under 13, so every
-/// dependency is a DEP-1 decision; and these carry their own stroke weights —
-/// submit at 3.2 against backspace at 2.6 — which no general set reproduces.
+/// **No icon package.** Every dependency is a DEP-1 decision — it widens the
+/// supply-chain surface and costs an audit again at every version (ADR 0003);
+/// and these carry their own stroke weights — submit at 3.2 against backspace
+/// at 2.6 — which no general set reproduces.
 library;
 
 import 'dart:ui';

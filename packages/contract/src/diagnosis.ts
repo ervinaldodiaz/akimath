@@ -3,7 +3,7 @@ import { z } from "zod";
 import { DigestSchema } from "./answer.js";
 
 /**
- * What `04 Error` shows a child, carried in a reserved, separately versioned,
+ * What `04 Error` shows a player, carried in a reserved, separately versioned,
  * nullable slot (design.md D3). Q2's answer, decided 2026-08-15: per labelled
  * distractor an `HMAC(canonical answer) → { misconception, steps, explain }`,
  * plus one generic, non-scolding fallback per skill for the answer no
@@ -14,7 +14,7 @@ import { DigestSchema } from "./answer.js";
  * the list, which is the security cost Q2 recorded.
  *
  * `misconception` is an English identifier — it is the id `diag_events`
- * records. `steps` and `explain` are the es-MX copy a child reads (LANG-1).
+ * records. `steps` and `explain` are the es-MX copy a player reads (LANG-1).
  */
 export const DIAGNOSIS_VERSION = 1 as const;
 
@@ -75,7 +75,7 @@ export function fallbackForSkill(
 }
 
 /**
- * The digest of what the child typed in, the diagnosis out. An answer no
+ * The digest of what the player typed in, the diagnosis out. An answer no
  * distractor anticipated resolves to the skill's fallback rather than to
  * nothing — `04` never degrades to "incorrecto".
  */

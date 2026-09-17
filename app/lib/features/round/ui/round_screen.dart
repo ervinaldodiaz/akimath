@@ -356,7 +356,7 @@ class _RoundScreenState extends State<RoundScreen> {
   /// the target of every forward affordance here, and the verdict screen labels
   /// that button by correctness: `Siguiente` on a win, **`Intentar otro`** on a slip — a request
   /// for another go, not an acknowledgement. Bound to the verb rather than to the
-  /// event, `onFinished` inherited it, so the child who answered *wrong* — the one
+  /// event, `onFinished` inherited it, so the player who answered *wrong* — the one
   /// who most needs the screen that teaches the answer format — was the one who
   /// permanently lost it by tapping the button the app offered them. The first run
   /// therefore completes when the item is **solved**, which is what

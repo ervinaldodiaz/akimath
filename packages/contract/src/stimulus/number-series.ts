@@ -5,7 +5,7 @@ import { checkUnknownIndex, type StimulusRejectionTag } from "./rejection.js";
 /**
  * Seven elastic tiles at most — the count `02 Reto activo` and the seven-cell
  * replay on `Error con diagnóstico` draw. `unknown_index` is the tile that
- * renders as `?`; the child's answer is the term it hides.
+ * renders as `?`; the player's answer is the term it hides.
  */
 export const NumberSeriesPayloadSchema = z.strictObject({
   terms: z.array(z.int()).min(3).max(7),

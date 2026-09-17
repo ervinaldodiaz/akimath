@@ -12,7 +12,7 @@
  * updated_at)` and carries no volatility column, which Glicko-2 requires.
  *
  * **The rating period is the session.** `ARCHITECTURE.md` §3: grouping by
- * request is deterministic but not *consistent* — two children with identical
+ * request is deterministic but not *consistent* — two players with identical
  * play would get different ratings depending on whether they had a connection,
  * in the app whose promise is fair adaptive difficulty. A session arrives as a
  * batch and is rated as one period.

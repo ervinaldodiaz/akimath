@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 /**
- * What the keypad collects, and how the client decides whether the child was
+ * What the keypad collects, and how the client decides whether the player was
  * right — without the pack ever stating the right answer.
  *
  * `ARCHITECTURE.md` §4: *"the answer never travels online. Offline, a
  * membership verifier travels."* The verifier is the digest: the client
- * canonicalizes what the child typed, digests it with the pack salt, and
+ * canonicalizes what the player typed, digests it with the pack salt, and
  * compares. `shape` is the union the plan names — `(num, den)` for a fraction,
  * a single integer for series, matrix, analogy, hidden operation and figurate.
  */

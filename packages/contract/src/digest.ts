@@ -4,7 +4,7 @@ import { requireStoredCanonical, type CanonResult, type RejectionTag } from "./c
 
 /**
  * The membership verifier `ARCHITECTURE.md` §4 asks for: the pack states a
- * digest, never the answer, so a child's device can tell right from wrong
+ * digest, never the answer, so a player's device can tell right from wrong
  * offline without carrying the answer in readable bytes.
  *
  * Message construction is frozen here because it is a cross-stack contract
@@ -33,7 +33,7 @@ export type DigestResult = DigestProduced | DigestRefused;
 
 /**
  * The only way pack content reaches a digest. Two spellings of one answer
- * would otherwise produce two digests and the child would be marked wrong for
+ * would otherwise produce two digests and the player would be marked wrong for
  * a keystroke, so the stored answer has to be canonical already (design.md D5).
  */
 export function digestStoredAnswer(packSaltHex: string, storedAnswer: string): DigestResult {
