@@ -67,21 +67,29 @@ export interface DigestGolden {
   readonly vectors: readonly DigestVector[];
 }
 
+/**
+ * The canonical spelling of a vector, or a throw.
+ *
+ * A vector the canonicalizer refuses is a vector nobody can digest, and a table
+ * that silently dropped one would claim a coverage it does not have.
+ */
+function requireDigestibleSpelling(stored: string): string {
+  const canonical = requireStoredCanonical(stored);
+  if (!canonical.ok) {
+    throw new Error(`"${stored}" is not a storable answer: ${canonical.tag}`);
+  }
+  return canonical.value;
+}
+
 export function buildDigestGolden(): DigestGolden {
   return {
     pack_salt_hex: DIGEST_GOLDEN_SALT,
     vectors: DIGEST_INPUTS.map((stored) => {
-      const canonical = requireStoredCanonical(stored);
-      if (!canonical.ok) {
-        // A vector the canonicalizer refuses is a vector nobody can digest, and
-        // a table that silently dropped one would claim a coverage it does not
-        // have.
-        throw new Error(`"${stored}" is not a storable answer: ${canonical.tag}`);
-      }
+      const canonical = requireDigestibleSpelling(stored);
       return {
         stored,
-        canonical: canonical.value,
-        digest: answerDigest(DIGEST_GOLDEN_SALT, canonical.value),
+        canonical,
+        digest: answerDigest(DIGEST_GOLDEN_SALT, canonical),
       };
     }),
   };

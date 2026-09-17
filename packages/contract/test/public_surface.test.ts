@@ -6,6 +6,22 @@ import * as contract from "../src/index.js";
  * `design.md` D9 gives the package a public surface that re-exports and holds
  * no logic of its own. `f1-contract-emitter` inherits this package, so the
  * names it can reach are part of the contract, not an implementation detail.
+ *
+ * **The last case is set equality, because the others cannot see an addition.**
+ * Each of them checks a name it already knows, so a new export would ship with
+ * no test at all — which is how `renderCanonicalAnswer` would have arrived
+ * unnoticed. Writing the list down was itself the finding: every schema,
+ * `canonicalJson`, `checkDistractors`, `declaredState` and the parsers had no
+ * surface coverage whatever. Adding to the surface should be a decision, and
+ * this is what makes it one. The count is reported rather than stated, because
+ * `[] === []` also passes for a module that failed to load (PROC-10, PROC-11).
+ *
+ * **`storedAnswer` and `storedAnswerOf` are two doors on one decision** — shape
+ * and spelling, decided together, for the two inputs a caller can hold. Who
+ * derives a stored answer is not asserted here in prose: `packages/core`'s and
+ * `packages/server`'s `one-way-to-spell-an-answer.test.ts` walk their own ASTs
+ * for a fourth copy, which is CMT-4's gate rather than a sentence that goes
+ * stale (this one did, naming two callers where there were three).
  */
 describe("the package's public surface", () => {
   it("exposes the pack parser and its format version", () => {
@@ -39,18 +55,6 @@ describe("the package's public surface", () => {
   });
 
   it("exposes exactly this surface and no more", () => {
-    // **Set equality, because the assertions above cannot see an addition.**
-    // Each of them checks a name it already knows, so a new export ships with
-    // no test at all — which is how `renderCanonicalAnswer` would have arrived
-    // unnoticed.
-    //
-    // Writing this list down was itself the finding: the surface is **36**
-    // names, and the five assertions above between them mention sixteen. Twenty
-    // exports — every schema, `canonicalJson`, `checkDistractors`,
-    // `declaredState`, the parsers — had no surface coverage at all.
-    // `f1-contract-emitter` inherits this package, so what it can reach is part
-    // of the contract rather than an implementation detail, and adding to it
-    // should be a decision. This is what makes it one.
     const exported = Object.keys(contract).sort();
 
     expect(exported).toEqual(
@@ -94,20 +98,11 @@ describe("the package's public surface", () => {
         "parseStimulus",
         "renderCanonicalAnswer",
         "requireStoredCanonical",
-  // Shape and spelling, decided together, behind two doors for the two inputs
-  // a caller can hold. **Three callers derive a stored answer**, and this said
-  // two — naming the server *issuing* a pack, which copies a pre-built artifact
-  // and derives nothing. The three that exist: `packages/core`'s `build.ts`
-  // (a template's exact rational) and `lift.ts` (an authored item's canonical
-  // string), and `packages/server`'s `gradeAnswer` (a rederived item's). The
-  // two string-holding ones used to decide it by hand, which is the bug that
-  // made every generated item ungradeable, returned.
-  "storedAnswer",
-  "storedAnswerOf",
+        "storedAnswer",
+        "storedAnswerOf",
       ].sort(),
     );
 
-    // PROC-11: `[] === []` passes for a module that failed to load.
     expect(exported.length).toBeGreaterThan(0);
     // eslint-disable-next-line no-console
     console.log(`  contract public surface · ${exported.length} exports`);

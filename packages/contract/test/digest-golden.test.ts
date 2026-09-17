@@ -33,10 +33,14 @@ function readFixture(name: string): unknown {
   ) as unknown;
 }
 
+/**
+ * **A table where everything collided would pass every other assertion here**,
+ * which is why one case pins that it does not. `2/4` and `1/2` are one value
+ * and one canonical spelling, so they share a digest — that is the point of
+ * canonicalizing first — and `1/2` and `1/3` do not.
+ */
 describe("the digest golden", () => {
   it("is what the code produces, not a hand-written vector", () => {
-    // The lesson `ARCHITECTURE.md` §3 records: a hand-written golden once
-    // claimed a value the canonical snippet did not produce.
     expect(readFixture("digest.golden.json")).toEqual(
       JSON.parse(JSON.stringify(buildDigestGolden())),
     );
@@ -55,9 +59,6 @@ describe("the digest golden", () => {
   });
 
   it("keys on the salt's bytes, not on its hex characters", () => {
-    // The mistake a second implementation makes, and the one a golden alone
-    // would catch only by luck. Stated as its own assertion so the failure
-    // names the cause.
     const asBytes = answerDigest(DIGEST_GOLDEN_SALT, "7");
     const asCharacters = answerDigest(
       Buffer.from(DIGEST_GOLDEN_SALT, "utf8").toString("hex"),
@@ -66,9 +67,7 @@ describe("the digest golden", () => {
     expect(asBytes).not.toBe(asCharacters);
   });
 
-  it("hashes the message with nothing added to it", () => {
-    // No length prefix, no separator, no trailing newline. Each of these is a
-    // choice somebody could make by accident and none of them is the contract.
+  it("hashes the message with no length prefix, separator or trailing newline", () => {
     const plain = answerDigest(DIGEST_GOLDEN_SALT, "1/2");
     expect(plain).not.toBe(answerDigest(DIGEST_GOLDEN_SALT, "1/2\n"));
     expect(plain).not.toBe(answerDigest(DIGEST_GOLDEN_SALT, "3:1/2"));
@@ -81,10 +80,6 @@ describe("the digest golden", () => {
   });
 
   it("distinguishes answers that canonicalize apart", () => {
-    // `2/4` and `1/2` are one value and one canonical spelling, so they share a
-    // digest — that is the point of canonicalizing first. `1/2` and `1/3` do
-    // not, and a table where everything collided would pass every other
-    // assertion here.
     const digests = buildDigestGolden().vectors.map((v) => v.digest);
     expect(new Set(digests).size).toBeGreaterThan(1);
   });

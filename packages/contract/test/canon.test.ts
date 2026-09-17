@@ -16,6 +16,12 @@ const ZERO_WIDTH_SPACE = "​";
 const COMBINING_ACUTE = "́";
 const MINUS_SIGN = "−";
 
+interface RenderedShape {
+  readonly numerator: bigint;
+  readonly denominator?: bigint;
+  readonly expected: string;
+}
+
 describe("canonicalize — learner input", () => {
   it("rejects an empty answer", () => {
     expect(canonicalize("")).toEqual({ ok: false, tag: "empty" });
@@ -139,13 +145,20 @@ describe("the committed canon.golden.json", () => {
   });
 });
 
+/**
+ * **Why the renderer lives in `canon.ts` calling the same private join.** If
+ * rendering and `requireStoredCanonical` could disagree, a pack would carry
+ * answers its own validator refuses — so everything the renderer produces is
+ * asserted to be storage-canonical, and the learner direction is asserted to
+ * fold to the same string.
+ *
+ * **The shape is the caller's decision and the spelling is this module's.**
+ * Guessing the shape from the value would make `renderCanonicalAnswer(4n)` and
+ * `renderCanonicalAnswer(4n, 1n)` the same call.
+ */
 describe("rendering is the inverse of canonicalizing, by construction", () => {
-  /** Every shape the renderer can produce, spanning sign, zero and denominator. */
-  const RENDERED: ReadonlyArray<{
-    readonly numerator: bigint;
-    readonly denominator?: bigint;
-    readonly expected: string;
-  }> = [
+  /** Whole numbers and fractions, both signs, with no subtlety in them. */
+  const PLAIN: readonly RenderedShape[] = [
     { numerator: 0n, expected: "0" },
     { numerator: 7n, expected: "7" },
     { numerator: -7n, expected: "-7" },
@@ -155,16 +168,33 @@ describe("rendering is the inverse of canonicalizing, by construction", () => {
     { numerator: 12n, denominator: 7n, expected: "12/7" },
     { numerator: 4n, denominator: 1n, expected: "4/1" },
     { numerator: 0n, denominator: 5n, expected: "0/5" },
-    // A sign on a zero magnitude is dropped, in both shapes. This is the rule a
-    // `-0/5` defect once shipped through on the Dart side.
+  ];
+
+  /**
+   * A sign on a zero magnitude is dropped, in both shapes — the rule a `-0/5`
+   * defect once shipped through on the Dart side.
+   */
+  const ZERO_MAGNITUDE_LOSES_ITS_SIGN: readonly RenderedShape[] = [
     { numerator: -0n, denominator: 5n, expected: "0/5" },
     { numerator: 0n, denominator: -5n, expected: "0/5" },
     { numerator: -0n, expected: "0" },
-    // A negative denominator moves its sign to the numerator.
+  ];
+
+  const NEGATIVE_DENOMINATOR_MOVES_ITS_SIGN: readonly RenderedShape[] = [
     { numerator: 3n, denominator: -4n, expected: "-3/4" },
     { numerator: -3n, denominator: -4n, expected: "3/4" },
-    // Beyond a double.
+  ];
+
+  const BEYOND_A_DOUBLE: readonly RenderedShape[] = [
     { numerator: 9007199254740993n, expected: "9007199254740993" },
+  ];
+
+  /** Every shape the renderer can produce, spanning sign, zero and denominator. */
+  const RENDERED: readonly RenderedShape[] = [
+    ...PLAIN,
+    ...ZERO_MAGNITUDE_LOSES_ITS_SIGN,
+    ...NEGATIVE_DENOMINATOR_MOVES_ITS_SIGN,
+    ...BEYOND_A_DOUBLE,
   ];
 
   it("renders the shape the format specifies", () => {
@@ -175,9 +205,6 @@ describe("rendering is the inverse of canonicalizing, by construction", () => {
   });
 
   it("everything it renders is already storage-canonical", () => {
-    // The property that matters, and the reason the renderer lives in this
-    // module calling the same private join: if these two could disagree, a pack
-    // would carry answers its own validator refuses.
     let checked = 0;
     for (const { numerator, denominator } of RENDERED) {
       const rendered = renderCanonicalAnswer(numerator, denominator);
@@ -205,37 +232,54 @@ describe("rendering is the inverse of canonicalizing, by construction", () => {
   });
 
   it("distinguishes an omitted denominator from a denominator of one", () => {
-    // The shape is the caller's decision and the spelling is this module's.
-    // Guessing from the value would make these the same call.
     expect(renderCanonicalAnswer(4n)).toBe("4");
     expect(renderCanonicalAnswer(4n, 1n)).toBe("4/1");
   });
 });
 
+/**
+ * **The bug these cases exist to make unrepeatable (#50).** A whole answer of
+ * `-9` was digested as `-9/1` while the shape beside it said `integer`, because
+ * the shape and the spelling were computed separately. Every generated item in
+ * the built pack was ungradeable, and the distractor-equals-answer guard —
+ * which compares strings — stopped firing in the same stroke.
+ *
+ * **Two doors for the two inputs a caller can hold, and one decision behind
+ * them**: `storedAnswer` from a `(numerator, denominator)` pair,
+ * `storedAnswerOf` from a canonical spelling. Their agreement is swept over a
+ * grid rather than over examples, because the three implementations this
+ * replaced agreed on every example anybody had written down.
+ *
+ * **A fraction stays unreduced.** `canonicalize` does not fold `4/8` to `1/2`,
+ * so a renderer that did would make the shipped pack's own answers ungradeable.
+ *
+ * **And `4/1` stays a fraction.** `storedAnswer` can never produce it —
+ * `denominator === 1n` renders a whole number — so it is the one string where
+ * the doors could have been made to disagree, and folding it would restate an
+ * authored answer. Nothing refuses it, which is the half worth pinning: `4/1`
+ * is #50's own string one sign away, and "the lifter was safe because
+ * validation caught this" is a false reading of a real guard.
+ *
+ * **The refusal sweep runs over `CANON_INPUTS`** rather than over rows chosen
+ * by hand, because a hand-chosen row is chosen by whoever already believes the
+ * answer: the first draft asserted `2/4` was refused, and it is canonical. The
+ * tag travels out unchanged, so a caller keeps what it already said, and both
+ * arms are counted — a sweep that fell down one proves only that one (PROC-11).
+ */
 describe("a stored answer decides its shape and its spelling together", () => {
   it("a whole answer is whole, and says so", () => {
-    // The bug this exists to make unrepeatable: `-9` digested as `-9/1` while
-    // the shape beside it said `integer`. Every generated item in the built
-    // pack was ungradeable, and the distractor guard — which compares
-    // strings — stopped firing.
     expect(storedAnswer(-9n, 1n)).toEqual({ shape: "integer", canonical: "-9" });
     expect(storedAnswer(0n, 1n)).toEqual({ shape: "integer", canonical: "0" });
     expect(storedAnswer(42n, 1n)).toEqual({ shape: "integer", canonical: "42" });
   });
 
   it("and a fraction keeps its denominator, unreduced", () => {
-    // Unreduced on purpose: `canonicalize` does not fold `4/8` to `1/2`, so a
-    // renderer that did would make the shipped pack's own answers ungradeable.
     expect(storedAnswer(5n, 4n)).toEqual({ shape: "fraction", canonical: "5/4" });
     expect(storedAnswer(4n, 8n)).toEqual({ shape: "fraction", canonical: "4/8" });
     expect(storedAnswer(-3n, 2n)).toEqual({ shape: "fraction", canonical: "-3/2" });
   });
 
-  it("and the two doors are one decision", () => {
-    // The property that makes a second door safe: whichever a caller holds —
-    // the exact pair or the spelling — it gets the same answer. Over a grid
-    // rather than examples, because the three implementations this replaced
-    // agreed on every example anybody had written down.
+  it("and the two doors agree over a grid, whichever input a caller holds", () => {
     for (const numerator of [-9n, -3n, -1n, 0n, 1n, 4n, 5n, 42n]) {
       for (const denominator of [-2n, -1n, 1n, 2n, 4n, 5n, 7n, 12n]) {
         const fromPair = storedAnswer(numerator, denominator);
@@ -247,23 +291,12 @@ describe("a stored answer decides its shape and its spelling together", () => {
   });
 
   it("and a spelling a pack may state but the pair cannot produce keeps its denominator", () => {
-    // `storedAnswer` can never produce `4/1` — `denominator === 1n` renders a
-    // whole number — so it is the one string where the doors could have been
-    // made to disagree. Folding it would restate an authored answer.
-    //
-    // Nothing refuses it, which is the half worth pinning: `4/1` is #50's own
-    // string one sign away, and "the lifter was safe because validation caught
-    // this" is a false reading of a real guard.
     expect(requireStoredCanonical("4/1")).toEqual({ ok: true, value: "4/1" });
     expect(storedAnswerOf("4/1")).toEqual({ ok: true, value: { shape: "fraction", canonical: "4/1" } });
     expect(storedAnswer(4n, 1n)).toEqual({ shape: "integer", canonical: "4" });
   });
 
   it("and over the shared vector set it refuses exactly what storage refuses", () => {
-    // Swept over `CANON_INPUTS` rather than rows chosen by hand, because a
-    // hand-chosen row is chosen by whoever already believes the answer: the
-    // first draft asserted `2/4` was refused, and it is canonical. The tag
-    // travels out unchanged, so a caller keeps what it already said (PROC-11).
     let accepted = 0;
     let refused = 0;
     for (const raw of CANON_INPUTS) {
@@ -280,16 +313,12 @@ describe("a stored answer decides its shape and its spelling together", () => {
         value: { shape: stored.value.includes("/") ? "fraction" : "integer", canonical: stored.value },
       });
     }
-    // PROC-11: a sweep that fell down one arm proves only that arm, and a
-    // sweep over an empty list proves nothing at all.
     expect(accepted).toBeGreaterThan(0);
     expect(refused).toBeGreaterThan(0);
     console.log(`  storedAnswerOf · ${accepted} accepted, ${refused} refused over CANON_INPUTS`);
   });
 
-  it("and what it writes is what a keypad produces", () => {
-    // The round trip that makes a digest reachable: whatever this stores, the
-    // learner's own canonicalised input must equal it.
+  it("and what it writes is what a keypad produces, which is what makes a digest reachable", () => {
     for (const [numerator, denominator] of [[-9n, 1n], [5n, 4n], [0n, 1n], [7n, 7n]] as const) {
       const stored = storedAnswer(numerator, denominator);
       const typed = canonicalize(stored.canonical);

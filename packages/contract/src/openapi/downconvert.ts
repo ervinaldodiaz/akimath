@@ -56,6 +56,16 @@ export const CARRIED_THROUGH: ReadonlySet<string> = new Set([
  */
 const NAME_KEYED: ReadonlySet<string> = new Set(["properties"]);
 
+/**
+ * Keywords dropped outright rather than translated.
+ *
+ * `$schema` says "this is JSON Schema", which a 3.0.3 document is not.
+ * `propertyNames` is what Zod emits for `z.record(z.string(), …)`, where it says
+ * only "the keys are strings" — which JSON already guarantees — and 3.0.3 has
+ * no such keyword to say it with anyway.
+ */
+const DROPPED: ReadonlySet<string> = new Set(["$schema", "propertyNames"]);
+
 /** Keywords this converter rewrites. Anything else is an error. */
 export const REWRITTEN: ReadonlySet<string> = new Set([
   "$schema",
@@ -106,6 +116,38 @@ function nullableUnion(branches: readonly unknown[]): Json | undefined {
   return { ...rest[0], nullable: true };
 }
 
+/**
+ * `anyOf` replaces the **whole node** rather than one of its keys, which is why
+ * it is collapsed before the per-keyword walk rather than inside it.
+ */
+function collapsedAnyOf(node: Json, anyOf: readonly unknown[], path: string): Json {
+  const collapsed = nullableUnion(anyOf);
+  if (collapsed === undefined) {
+    fail("anyOf", path);
+  }
+  const { anyOf: _dropped, ...rest } = node;
+  return { ...rest, ...collapsed };
+}
+
+/**
+ * One half of the ±safe-integer pair Zod puts on an unbounded `z.int()`.
+ *
+ * Recognised as a **pair** — both bounds present, on an integer — so a schema
+ * that really does say `max(9007199254740991)` beside a real minimum keeps it.
+ */
+function isSyntheticIntegerBound(key: string, value: unknown, node: Json): boolean {
+  if (node["type"] !== "integer") {
+    return false;
+  }
+  if (node["minimum"] !== JS_SAFE_MIN || node["maximum"] !== JS_SAFE_MAX) {
+    return false;
+  }
+  return (
+    (key === "maximum" && value === JS_SAFE_MAX) ||
+    (key === "minimum" && value === JS_SAFE_MIN)
+  );
+}
+
 function convertNode(node: unknown, path: string): unknown {
   if (Array.isArray(node)) {
     return node.map((item, index) => convertNode(item, `${path}[${index}]`));
@@ -114,15 +156,9 @@ function convertNode(node: unknown, path: string): unknown {
     return node;
   }
 
-  // `anyOf` is rewritten before the walk, because it replaces the whole node.
   const anyOf = node["anyOf"];
   if (Array.isArray(anyOf)) {
-    const collapsed = nullableUnion(anyOf);
-    if (collapsed === undefined) {
-      fail("anyOf", path);
-    }
-    const { anyOf: _dropped, ...rest } = node;
-    return convertNode({ ...rest, ...collapsed }, path);
+    return convertNode(collapsedAnyOf(node, anyOf, path), path);
   }
 
   const out: Json = {};
@@ -130,13 +166,7 @@ function convertNode(node: unknown, path: string): unknown {
   for (const [key, value] of Object.entries(node)) {
     const where = path === "" ? key : `${path}.${key}`;
 
-    if (key === "$schema") {
-      continue; // A 3.0.3 document is not JSON Schema and does not say it is.
-    }
-
-    if (key === "propertyNames") {
-      // 3.0.3 has no such keyword. Zod emits it for `z.record(z.string(), …)`,
-      // where it says only "keys are strings" — which JSON already guarantees.
+    if (DROPPED.has(key)) {
       continue;
     }
 
@@ -146,8 +176,8 @@ function convertNode(node: unknown, path: string): unknown {
     }
 
     if (key === "exclusiveMinimum" || key === "exclusiveMaximum") {
-      if (typeof value !== "number") {
-        // Already the 3.0.3 boolean form; leave it and its companion alone.
+      const alreadyInBooleanForm = typeof value !== "number";
+      if (alreadyInBooleanForm) {
         out[key] = value;
         continue;
       }
@@ -166,22 +196,7 @@ function convertNode(node: unknown, path: string): unknown {
       continue;
     }
 
-    if (
-      key === "maximum" &&
-      value === JS_SAFE_MAX &&
-      node["type"] === "integer" &&
-      node["minimum"] === JS_SAFE_MIN
-    ) {
-      // Both halves of Zod's synthetic pair, recognised together so a real
-      // `max(9007199254740991)` beside a real minimum is not silently dropped.
-      continue;
-    }
-    if (
-      key === "minimum" &&
-      value === JS_SAFE_MIN &&
-      node["type"] === "integer" &&
-      node["maximum"] === JS_SAFE_MAX
-    ) {
+    if (isSyntheticIntegerBound(key, value, node)) {
       continue;
     }
 

@@ -18,9 +18,13 @@ import {
 const draft7 = (schema: z.ZodType): unknown =>
   z.toJSONSchema(schema, { target: "draft-7" });
 
+/**
+ * **The exclusive-bound rewrite is the one that needs saying.** draft-7 spells
+ * it `exclusiveMinimum: 0`; 3.0.3 spells it `minimum: 0` plus
+ * `exclusiveMinimum: true`, which is the draft-4 form it inherited.
+ */
 describe("what Zod emits becomes what 3.0.3 admits", () => {
   it("drops the dialect declaration", () => {
-    // `$schema` says "this is JSON Schema", which a 3.0.3 document is not.
     const converted = toOpenApi303(draft7(z.object({ a: z.string() }))) as {
       $schema?: unknown;
     };
@@ -28,8 +32,6 @@ describe("what Zod emits becomes what 3.0.3 admits", () => {
   });
 
   it("rewrites a nullable union as `nullable: true`", () => {
-    // Zod emits `anyOf: [{type: string}, {type: null}]`. 3.0.3 has no null type
-    // and no union here — it has a keyword.
     const converted = toOpenApi303(draft7(z.object({ a: z.string().nullable() }))) as {
       properties: { a: Record<string, unknown> };
     };
@@ -44,8 +46,6 @@ describe("what Zod emits becomes what 3.0.3 admits", () => {
   });
 
   it("rewrites a numeric exclusive bound as the boolean form", () => {
-    // draft-7 says `exclusiveMinimum: 0`. 3.0.3 says `minimum: 0` plus
-    // `exclusiveMinimum: true`, which is the draft-4 spelling it inherited.
     const converted = toOpenApi303(draft7(z.object({ a: z.number().gt(0) }))) as {
       properties: { a: Record<string, unknown> };
     };
@@ -57,19 +57,13 @@ describe("what Zod emits becomes what 3.0.3 admits", () => {
   });
 
   it("strips the bounds Zod invents for an unbounded integer", () => {
-    // `z.int()` emits ±9007199254740991. That is a fact about JavaScript's safe
-    // integer range, not about the API, and it would otherwise be published as
-    // a contract every client has to honour.
     const converted = toOpenApi303(draft7(z.object({ a: z.int() }))) as {
       properties: { a: Record<string, unknown> };
     };
     expect(converted.properties.a).toEqual({ type: "integer" });
   });
 
-  it("keeps bounds the author actually wrote", () => {
-    // The control for the rule above: stripping by value would silently drop a
-    // real `max(20)` the day somebody chose 9007199254740991 on purpose is not
-    // the risk — dropping a real bound is.
+  it("keeps bounds the author actually wrote, the control for stripping the synthetic pair", () => {
     const converted = toOpenApi303(draft7(z.object({ a: z.int().min(1).max(20) }))) as {
       properties: { a: Record<string, unknown> };
     };
@@ -80,10 +74,17 @@ describe("what Zod emits becomes what 3.0.3 admits", () => {
     });
   });
 
+  it("keeps a synthetic-looking minimum whose partner is a real bound", () => {
+    const halfSynthetic = { type: "integer", minimum: Number.MIN_SAFE_INTEGER, maximum: 20 };
+    expect(toOpenApi303(halfSynthetic)).toEqual(halfSynthetic);
+  });
+
+  it("keeps a synthetic-looking maximum whose partner is a real bound", () => {
+    const halfSynthetic = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER };
+    expect(toOpenApi303(halfSynthetic)).toEqual(halfSynthetic);
+  });
+
   it("drops `propertyNames`, which 3.0.3 does not have", () => {
-    // Found by probing rather than by planning: `z.record(z.string(),
-    // z.unknown())` — the shape the frozen pack format already uses for an
-    // opaque payload — emits `propertyNames`, and 3.0.3 has no such keyword.
     const converted = toOpenApi303(
       draft7(z.object({ a: z.record(z.string(), z.unknown()) })),
     ) as { properties: { a: Record<string, unknown> } };
@@ -110,11 +111,14 @@ describe("what Zod emits becomes what 3.0.3 admits", () => {
   });
 });
 
+/**
+ * **The most important behaviour in the file**, and the second case is its
+ * control: a converter that refused *everything* would pass the refusal cases
+ * and emit nothing, so the vocabulary the package's own schemas actually
+ * produce is run through it too.
+ */
 describe("a construct it does not understand is refused, not passed through", () => {
   it("names the keyword and where it was", () => {
-    // **The most important test in the file.** A pass-through default is how a
-    // 2020-12 construct reaches a Dart client that cannot read it, months
-    // later, with every gate green the whole way.
     expect(() =>
       toOpenApi303({ type: "object", properties: { a: { $dynamicRef: "#meta" } } }),
     ).toThrow(/\$dynamicRef.*properties\.a/s);
@@ -129,9 +133,6 @@ describe("a construct it does not understand is refused, not passed through", ()
   });
 
   it("and accepts every keyword the real schemas use", () => {
-    // The control: a converter that refuses everything would pass the two tests
-    // above and emit nothing. This is the whole vocabulary the package's own
-    // schemas produce.
     const kitchenSink = z.object({
       id: z.uuid(),
       when: z.iso.datetime(),
@@ -158,14 +159,20 @@ describe("the conversion is a pure function", () => {
     expect(JSON.stringify(input)).toBe(before);
   });
 
-  it("is idempotent on its own output", () => {
-    // A 3.0.3 document run through again must come out unchanged, or emitting
-    // twice would drift — which is exactly what the byte-diff gate checks.
+  it("is idempotent on its own output, because the byte-diff gate emits twice", () => {
     const once = toOpenApi303(draft7(z.object({ a: z.string().nullable(), b: z.int() })));
     expect(toOpenApi303(once)).toEqual(once);
   });
 });
 
+/**
+ * **Without these two cases the two sets are unverified.** Most of their
+ * entries are keywords this package's own schemas never produce, so a wrong one
+ * — a typo, or a keyword 3.0.3 does not actually admit — would sit there
+ * indefinitely; mutation testing found exactly that, as a wall of surviving
+ * string literals. The third case is what makes the two sets *closed* rather
+ * than decorative.
+ */
 describe("the vocabulary is real, entry by entry", () => {
   /** A value each keyword can plausibly hold, so the entry is exercised. */
   const SAMPLE: Readonly<Record<string, unknown>> = {
@@ -196,11 +203,6 @@ describe("the vocabulary is real, entry by entry", () => {
   };
 
   it("every carried-through keyword is genuinely carried through", () => {
-    // **Without this the list is unverified.** Most entries are keywords this
-    // package's own schemas never produce, so a wrong entry — a typo, a keyword
-    // 3.0.3 does not actually admit — would sit there indefinitely. Mutation
-    // testing found it as a wall of surviving string literals, which is the
-    // report telling the truth: nothing exercised them.
     expect(CARRIED_THROUGH.size).toBeGreaterThan(0);
     for (const keyword of CARRIED_THROUGH) {
       const sample = SAMPLE[keyword];
@@ -242,8 +244,6 @@ describe("the vocabulary is real, entry by entry", () => {
   });
 
   it("a keyword in neither set is refused", () => {
-    // The two sets are the whole vocabulary, and this is what makes them closed
-    // rather than decorative.
     expect(CARRIED_THROUGH.has("prefixItems")).toBe(false);
     expect(REWRITTEN.has("prefixItems")).toBe(false);
     expect(() => toOpenApi303({ prefixItems: [] })).toThrow(/prefixItems/);
