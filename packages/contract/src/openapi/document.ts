@@ -43,17 +43,6 @@ const errors = {
 };
 
 /**
- * The answer to an authenticated caller whose operation the server has not
- * built.
- *
- * **Spread per operation, never folded into `errors` above**, because this one
- * is temporary and the others are not. Every operation carries it today and
- * each drops it as it lands, so the diff that implements an endpoint is also
- * the diff that stops advertising it as missing — and `contract-parity.test.ts`
- * holds this list to exactly the operations the router still answers 501 for,
- * in both directions, so it cannot go stale in either.
- */
-/**
  * The answer to a link that cannot happen because one already did.
  *
  * Only `linkPlayer` can produce it: `players.auth_user_id` is UNIQUE and
@@ -69,6 +58,19 @@ const alreadyLinked = {
   },
 };
 
+/**
+ * The answer to an authenticated caller whose operation the server has not
+ * built.
+ *
+ * **Spread per operation, never folded into `errors` above**, because this one
+ * is temporary and the others are not. An operation drops the spread in the
+ * same diff that builds it, so the diff that implements an endpoint is also the
+ * diff that stops advertising it as missing — and
+ * `packages/server/test/contract-parity.test.ts` holds this list to exactly the
+ * operations the router still answers 501 for, in both directions, so a path
+ * that spreads it and a path that does not are both checked rather than
+ * asserted, and neither can go stale.
+ */
 const notImplemented = {
   "501": {
     description: "Routed and authenticated, but the server has not built it yet.",
@@ -106,6 +108,234 @@ const SECURITY_SCHEMES = {
   },
 };
 
+const nextItemPath = {
+  get: {
+    operationId: "getNextItem",
+    summary: "The next item to show, already rendered.",
+    responses: {
+      "200": {
+        description: "An item.",
+        ...(json(ref("ItemResponse")) as object),
+      },
+      ...errors,
+      ...notImplemented,
+    },
+  },
+};
+
+/**
+ * **The rule the schema cannot state.** `AttemptSubmission` carries `itemId`
+ * and `packRef` as two optionals because 3.0.3 has no general union and
+ * `downconvert.ts` refuses the `oneOf` that would express it. The constraint is
+ * real and enforced twice — the server's reader answers 400, the
+ * `attempts_one_source` CHECK is behind it — so the operation's `description`
+ * states it rather than leaving it to be discovered.
+ */
+const attemptsPath = {
+  post: {
+    operationId: "submitAttempts",
+    summary: "Submit a session's attempts and receive their verdicts.",
+    description:
+      "Each attempt names exactly one source: `itemId` for an item this " +
+      "server issued, or `packRef` for one the player got in an offline " +
+      "pack. Neither, or both, is a 400. The server grades the answer " +
+      "itself — there is no field on a submission that asserts a verdict.",
+    requestBody: {
+      required: true,
+      ...(json(ref("AttemptBatch")) as object),
+    },
+    responses: {
+      "200": {
+        description: "One verdict per attempt, in the order submitted.",
+        ...(json(ref("VerdictBatch")) as object),
+      },
+      ...errors,
+    },
+  },
+};
+
+/**
+ * **The ninth operation, added 2026-08-19.** `GET /packs/{packId}` fetches a
+ * pack by an id, and nothing minted one — `offline_packs` could only ever be
+ * empty, so `POST /attempts` could never be reached by a pack attempt. This is
+ * what mints it.
+ *
+ * **No request body.** The player comes from the session, the same reason
+ * `PlayerLink` refuses an account id: a body that named whose pack to issue
+ * would be a caller issuing into somebody else's row. What the pack *contains*
+ * is the server's decision, not the client's — difficulty is a rating question
+ * and rating is F4.
+ *
+ * **No `Idempotency-Key`, unlike `POST /players/link`.** Issuing is not
+ * idempotent by nature: each call is a new pack, legitimately. A retried
+ * request leaves a second pack, and a second pack is harmless — both are valid,
+ * both rederive, and the client uses the one it received. Requiring a header
+ * the server could not honour would teach clients it means something.
+ */
+const issuePackPath = {
+  post: {
+    operationId: "issuePack",
+    summary: "Issue a new offline pack to the player.",
+    description:
+      "Every item in an issued pack is generated from a template, so " +
+      "every one can be rederived and graded at sync. Authored content " +
+      "and puzzles are not issued this way: they carry no template " +
+      "reference, so `(packId, index)` could not address them.",
+    responses: {
+      "200": { description: "The pack.", ...(json(ref("OfflinePack")) as object) },
+      ...errors,
+    },
+  },
+};
+
+/**
+ * A re-fetch rebuilds the pack from the stored manifest and salt rather than
+ * reading a body back, which is what the manifest is for.
+ */
+const offlinePackPath = {
+  get: {
+    operationId: "getOfflinePack",
+    summary: "An issued offline pack.",
+    parameters: [
+      {
+        name: "packId",
+        in: "path",
+        required: true,
+        schema: { type: "string", format: "uuid" },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "The pack.",
+        ...(json(ref("OfflinePack")) as object),
+      },
+      ...errors,
+    },
+  },
+};
+
+const playerLinkPath = {
+  post: {
+    operationId: "linkPlayer",
+    summary: "Attach a locally-minted player to the current account.",
+    parameters: [
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        required: true,
+        schema: { type: "string" },
+      },
+    ],
+    requestBody: {
+      required: true,
+      ...(json(ref("PlayerLink")) as object),
+    },
+    responses: {
+      "200": { description: "Linked.", ...(json(ref("Me")) as object) },
+      ...errors,
+      ...alreadyLinked,
+    },
+  },
+};
+
+/**
+ * **`DELETE`'s scope is in the contract, not only in the server.** A caller
+ * reading `204 Erased.` would reasonably conclude the account is gone too, and
+ * it is not: identity lives in the provider's `neon_auth` schema and this
+ * service holds no credential that could remove it. Saying so in the
+ * operation's `description` is cheaper than a support thread, and it is the one
+ * place both halves of the stack read.
+ */
+const mePath = {
+  get: {
+    operationId: "getMe",
+    summary: "The current player.",
+    responses: {
+      "200": { description: "The player.", ...(json(ref("Me")) as object) },
+      ...errors,
+    },
+  },
+  delete: {
+    operationId: "deleteMe",
+    summary: "Erase the player and everything this service recorded about them.",
+    description:
+      "Deletes the player row and everything that references it: attempts, " +
+      "issued items, offline packs, skill ratings and diagnosis events. " +
+      "Aggregates that carry no player identifier are unaffected. This does " +
+      "not delete the Neon Auth account — the email and the sign-in survive " +
+      "it, and removing those is a separate act at the identity provider.",
+    responses: {
+      "204": { description: "Erased." },
+      ...errors,
+    },
+  },
+};
+
+/**
+ * **What an empty `skills` means, said here rather than inferred.** `rating` is
+ * required and not nullable, so unlike `ratingDelta` on a history entry there
+ * is no null a caller could read as "not yet" — the absence of a rating is the
+ * absence of an entry. The server writes one when a session is rated against a
+ * difficulty class the players have already measured, so an empty list means
+ * "nobody has measured this player yet" — and a client that drew a 0 from it
+ * would be inventing a figure the server never sent.
+ */
+const standingPath = {
+  get: {
+    operationId: "getStanding",
+    summary: "The player's rating per skill.",
+    description:
+      "The player's rating for each skill that has one. A skill nothing " +
+      "has rated yet has no entry rather than a zero, so a player who has " +
+      "never been rated is answered an empty list and not a 404. This " +
+      "operation carries rating only: accuracy and time on task are not " +
+      "part of this shape.",
+    responses: {
+      "200": {
+        description: "The standing.",
+        ...(json(ref("Standing")) as object),
+      },
+      ...errors,
+    },
+  },
+};
+
+const historyPath = {
+  get: {
+    operationId: "getHistory",
+    summary: "Recent series and puzzles.",
+    responses: {
+      "200": {
+        description: "The history.",
+        ...(json(ref("History")) as object),
+      },
+      ...errors,
+    },
+  },
+};
+
+/**
+ * **At the root, not per operation.** Every operation in this document is
+ * client-facing and every one of them declares `401 — No valid session`, so
+ * repeating the requirement eight times buys nothing and costs the ninth, where
+ * somebody forgets the line and ships an open endpoint. `/health` is not here
+ * to be excused: it is an ops route, named in `OPS_ROUTES` and deliberately
+ * outside the contract.
+ */
+const ROOT_SECURITY = [{ session: [] }];
+
+/** Every path this service describes, in the order the document declares them. */
+const PATHS = {
+  "/items/next": nextItemPath,
+  "/attempts": attemptsPath,
+  "/packs": issuePackPath,
+  "/packs/{packId}": offlinePackPath,
+  "/players/link": playerLinkPath,
+  "/me": mePath,
+  "/me/standing": standingPath,
+  "/me/history": historyPath,
+};
+
 export function buildOpenApiDocument(): unknown {
   const schemas: Record<string, unknown> = {};
   for (const [name, schema] of Object.entries(API_SCHEMAS)) {
@@ -124,221 +354,8 @@ export function buildOpenApiDocument(): unknown {
         "a membership verifier travels and its verdict is provisional until sync.",
     },
     servers: [{ url: "/v1" }],
-    paths: {
-      "/items/next": {
-        get: {
-          operationId: "getNextItem",
-          summary: "The next item to show, already rendered.",
-          responses: {
-            "200": {
-              description: "An item.",
-              ...(json(ref("ItemResponse")) as object),
-            },
-            ...errors,
-            ...notImplemented,
-          },
-        },
-      },
-      "/attempts": {
-        post: {
-          operationId: "submitAttempts",
-          summary: "Submit a session's attempts and receive their verdicts.",
-          // **The rule the schema cannot state.** `AttemptSubmission` carries
-          // `itemId` and `packRef` as two optionals because 3.0.3 has no
-          // general union and `downconvert.ts` refuses the `oneOf` that would
-          // express it. The constraint is real and enforced twice — the
-          // server's reader answers 400, the `attempts_one_source` CHECK is
-          // behind it — so it is written here rather than left to be
-          // discovered.
-          description:
-            "Each attempt names exactly one source: `itemId` for an item this " +
-            "server issued, or `packRef` for one the player got in an offline " +
-            "pack. Neither, or both, is a 400. The server grades the answer " +
-            "itself — there is no field on a submission that asserts a verdict.",
-          requestBody: {
-            required: true,
-            ...(json(ref("AttemptBatch")) as object),
-          },
-          responses: {
-            "200": {
-              description: "One verdict per attempt, in the order submitted.",
-              ...(json(ref("VerdictBatch")) as object),
-            },
-            ...errors,
-            // No `notImplemented`: this one is built, and the parity gate holds
-            // the contract's 501 list to exactly the operations that are not.
-          },
-        },
-      },
-      "/packs": {
-        post: {
-          operationId: "issuePack",
-          summary: "Issue a new offline pack to the player.",
-          // **The ninth operation, added 2026-08-19.** `GET /packs/{packId}`
-          // fetches a pack by an id, and nothing minted one — `offline_packs`
-          // could only ever be empty, so `POST /attempts` could never be
-          // reached by a pack attempt. This is what mints it.
-          //
-          // **No request body.** The player comes from the session, the same
-          // reason `PlayerLink` refuses an account id: a body that named whose
-          // pack to issue would be a caller issuing into somebody else's row.
-          // What the pack *contains* is the server's decision, not the
-          // client's — difficulty is a rating question and rating is F4.
-          //
-          // **No `Idempotency-Key`, unlike `POST /players/link`.** Issuing is
-          // not idempotent by nature: each call is a new pack, legitimately.
-          // A retried request leaves a second pack, and a second pack is
-          // harmless — both are valid, both rederive, and the client uses the
-          // one it received. Requiring a header the server could not honour
-          // would teach clients it means something.
-          description:
-            "Every item in an issued pack is generated from a template, so " +
-            "every one can be rederived and graded at sync. Authored content " +
-            "and puzzles are not issued this way: they carry no template " +
-            "reference, so `(packId, index)` could not address them.",
-          responses: {
-            "200": { description: "The pack.", ...(json(ref("OfflinePack")) as object) },
-            ...errors,
-            // No `notImplemented`: this one is built.
-          },
-        },
-      },
-      "/packs/{packId}": {
-        get: {
-          operationId: "getOfflinePack",
-          summary: "An issued offline pack.",
-          parameters: [
-            {
-              name: "packId",
-              in: "path",
-              required: true,
-              schema: { type: "string", format: "uuid" },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "The pack.",
-              ...(json(ref("OfflinePack")) as object),
-            },
-            ...errors,
-            // No `notImplemented`: this one is built. A re-fetch rebuilds the
-            // pack from the stored manifest and salt rather than reading a
-            // body back, which is what the manifest is for.
-          },
-        },
-      },
-      "/players/link": {
-        post: {
-          operationId: "linkPlayer",
-          summary: "Attach a locally-minted player to the current account.",
-          parameters: [
-            {
-              name: "Idempotency-Key",
-              in: "header",
-              required: true,
-              schema: { type: "string" },
-            },
-          ],
-          requestBody: {
-            required: true,
-            ...(json(ref("PlayerLink")) as object),
-          },
-          responses: {
-            "200": { description: "Linked.", ...(json(ref("Me")) as object) },
-            ...errors,
-            ...alreadyLinked,
-            // No `notImplemented`: this one is built, and the parity gate holds
-            // the contract's 501 list to exactly the operations that are not.
-          },
-        },
-      },
-      "/me": {
-        get: {
-          operationId: "getMe",
-          summary: "The current player.",
-          responses: {
-            "200": { description: "The player.", ...(json(ref("Me")) as object) },
-            ...errors,
-            // No `notImplemented`: this one is built. The spread comes off an
-            // operation in the same diff that implements it, and
-            // `contract-parity.test.ts` fails if the two ever disagree.
-          },
-        },
-        delete: {
-          operationId: "deleteMe",
-          summary: "Erase the player and everything this service recorded about them.",
-          // **The scope is in the contract, not only in the server.** A caller
-          // reading `204 Erased.` would reasonably conclude the account is gone
-          // too, and it is not: identity lives in the provider's `neon_auth`
-          // schema and this service holds no credential that could remove it.
-          // Saying so here is cheaper than a support thread, and it is the one
-          // place both halves of the stack read.
-          description:
-            "Deletes the player row and everything that references it: attempts, " +
-            "issued items, offline packs, skill ratings and diagnosis events. " +
-            "Aggregates that carry no player identifier are unaffected. This does " +
-            "not delete the Neon Auth account — the email and the sign-in survive " +
-            "it, and removing those is a separate act at the identity provider.",
-          responses: {
-            "204": { description: "Erased." },
-            ...errors,
-            // No `notImplemented`: this one is built, and the parity gate holds
-            // the contract's 501 list to exactly the operations that are not.
-          },
-        },
-      },
-      "/me/standing": {
-        get: {
-          operationId: "getStanding",
-          summary: "The player's rating per skill.",
-          // **What an empty `skills` means, said here rather than inferred.**
-          // `rating` is required and not nullable, so unlike `ratingDelta` on a
-          // history entry there is no null a caller could read as "not yet" —
-          // the absence of a rating is the absence of an entry. The server
-          // writes one when a session is rated against a difficulty class the
-          // players have already measured, so an empty list means "nobody has
-          // measured this player yet" — and a client that drew a 0 from it
-          // would be inventing a figure the server never sent.
-          description:
-            "The player's rating for each skill that has one. A skill nothing " +
-            "has rated yet has no entry rather than a zero, so a player who has " +
-            "never been rated is answered an empty list and not a 404. This " +
-            "operation carries rating only: accuracy and time on task are not " +
-            "part of this shape.",
-          responses: {
-            "200": {
-              description: "The standing.",
-              ...(json(ref("Standing")) as object),
-            },
-            ...errors,
-            // No `notImplemented`: this one is built. The spread comes off in
-            // the same diff that adds the handler, and `contract-parity.test.ts`
-            // holds the 501 list to exactly the operations that are not built.
-          },
-        },
-      },
-      "/me/history": {
-        get: {
-          operationId: "getHistory",
-          summary: "Recent series and puzzles.",
-          responses: {
-            "200": {
-              description: "The history.",
-              ...(json(ref("History")) as object),
-            },
-            ...errors,
-            // No `notImplemented`: this one is built.
-          },
-        },
-      },
-    },
-    // **At the root, not per operation.** Every operation in this document is
-    // client-facing and every one of them declares `401 — No valid session`, so
-    // repeating the requirement eight times buys nothing and costs the ninth,
-    // where somebody forgets the line and ships an open endpoint. `/health` is
-    // not here to be excused: it is an ops route, named in `OPS_ROUTES` and
-    // deliberately outside the contract.
-    security: [{ session: [] }],
+    paths: PATHS,
+    security: ROOT_SECURITY,
     components: { schemas, securitySchemes: SECURITY_SCHEMES },
   };
 }

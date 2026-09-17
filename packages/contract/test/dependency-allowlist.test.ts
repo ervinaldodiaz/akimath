@@ -57,40 +57,44 @@ function readManifest(relative: string): Manifest {
   return JSON.parse(readFileSync(path, "utf8")) as Manifest;
 }
 
-/** An exact pin: no caret, no tilde, no range. */
+/**
+ * An exact pin: no caret, no tilde, no range.
+ *
+ * The pack determinism gate is byte-for-byte, so a caret is a diff in
+ * `contract/` that arrives on somebody else's install rather than in the commit
+ * that caused it.
+ */
 function isExactlyPinned(range: string): boolean {
   return /^\d+\.\d+\.\d+$/.test(range);
 }
 
 const manifest = readManifest("../package.json");
 
+/**
+ * **Both directions, on purpose.** A package that stops being depended on
+ * should leave the allowlist, or the allowlist stops describing anything.
+ *
+ * **Dev dependencies are deliberately out of scope** (DEP-1): they do not ship,
+ * and sweeping them in would make the gate fire on every test-tooling bump and
+ * get it switched off inside a week.
+ */
 describe("the runtime dependency list is a committed allowlist", () => {
   const declared = Object.keys(manifest.dependencies ?? {});
 
-  it("read the manifest it thinks it read", () => {
-    // Without this, the assertions below are also true of a file that does not
-    // exist, a manifest for another package, and `{}`. "One dependency" has to
-    // be distinguishable from "nothing was read" (PROC-11).
+  it("read the manifest it thinks it read, so one dependency is distinguishable from none", () => {
     expect(manifest.name).toBe("@akimath/contract");
   });
 
-  it("declares no runtime dependency the allowlist does not", () => {
-    // Both directions. A package that stops being depended on should leave the
-    // list, or the list stops describing anything.
+  it("declares exactly the runtime dependencies the allowlist does", () => {
     expect(new Set(declared)).toEqual(ALLOWED_RUNTIME_DEPENDENCIES);
   });
 
-  it("declares no runtime dependency by the quieter routes", () => {
-    // The two ways a shipping dependency arrives without appearing under
-    // `dependencies`. `packages/core`'s gate checks both; the server's does
-    // not, and this package is the one that actually ships something.
+  it("declares no runtime dependency by the two quieter routes", () => {
     expect(manifest.peerDependencies).toBeUndefined();
     expect(manifest.optionalDependencies).toBeUndefined();
   });
 
   it("pins every runtime dependency exactly", () => {
-    // The pack determinism gate is byte-for-byte, so a caret here is a diff in
-    // `contract/` that arrives on somebody else's install.
     for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
       expect(
         isExactlyPinned(range),
@@ -99,9 +103,7 @@ describe("the runtime dependency list is a committed allowlist", () => {
     }
   });
 
-  it("resolves each runtime dependency to the version it pinned", () => {
-    // A pin nothing installed against is a comment. This is the pin checked
-    // against what is actually on disk.
+  it("resolves each runtime dependency to the version it pinned, because a pin nothing installed against is a comment", () => {
     for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
       const resolved = readManifest(`../node_modules/${name}/package.json`);
       expect(resolved.version, `${name} resolved to ${resolved.version}`).toBe(
@@ -110,10 +112,7 @@ describe("the runtime dependency list is a committed allowlist", () => {
     }
   });
 
-  it("and each one brings nothing of its own", () => {
-    // The transitive half, and the reason this file is not redundant with the
-    // server's cross-package check: that one reads this manifest, so it sees a
-    // new entry here and never what such an entry would drag in behind it.
+  it("and each one brings nothing of its own, which is the hole a cross-package check cannot see", () => {
     const brought = new Set<string>();
     for (const name of declared) {
       const resolved = readManifest(`../node_modules/${name}/package.json`);
@@ -130,9 +129,7 @@ describe("the runtime dependency list is a committed allowlist", () => {
     ).toEqual([]);
   });
 
-  it("ships nothing with an install-time script", () => {
-    // All three hooks, not just `postinstall`: `preinstall` and `install` run
-    // at the same unwatched moment and reach the network just as well.
+  it("ships nothing with an install-time script, on any of the three hooks", () => {
     for (const name of declared) {
       const resolved = readManifest(`../node_modules/${name}/package.json`);
       for (const hook of ["preinstall", "install", "postinstall"] as const) {
@@ -145,7 +142,6 @@ describe("the runtime dependency list is a committed allowlist", () => {
   });
 
   it("reports what it scanned, and scanning nothing is a failure", () => {
-    // A reader one typo away from matching nothing passes forever.
     expect(declared.length).toBeGreaterThan(0);
     // eslint-disable-next-line no-console
     console.log(
@@ -153,9 +149,7 @@ describe("the runtime dependency list is a committed allowlist", () => {
     );
   });
 
-  it("dev dependencies are out of scope", () => {
-    // They do not ship. Sweeping them in would make the gate fire on every
-    // test-tooling bump and get disabled within a week.
+  it("dev dependencies are out of scope, because they do not ship", () => {
     expect(Object.keys(manifest.devDependencies ?? {}).length).toBeGreaterThan(
       0,
     );
