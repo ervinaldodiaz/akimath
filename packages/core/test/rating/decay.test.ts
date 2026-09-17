@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import { decay } from "../../src/rating/decay.js";
 import { INITIAL_DEVIATION, type Skill } from "../../src/rating/glicko.js";
 
+/**
+ * Uncertainty is counted in days away, never in sessions.
+ *
+ * With the session as the rating period, a player who never opens the app has
+ * no periods at all, so a per-period decay would leave a year-old rating
+ * looking as certain as yesterday's. Counting days is what makes an absence
+ * cost something.
+ */
+
+/** A rating the system is very sure of, so an absence has room to blunt it. */
 const sharp: Skill = { rating: 1600, deviation: 50 };
 
 describe("uncertainty grows with days away, not with sessions", () => {
@@ -10,9 +20,7 @@ describe("uncertainty grows with days away, not with sessions", () => {
     expect(decay(sharp, 0)).toEqual(sharp);
   });
 
-  it("the rating itself never moves", () => {
-    // Time tells you nothing about how good someone is, only about how sure you
-    // can be. A decay that nudged the rating would be inventing evidence.
+  it("the rating itself never moves — time says only how sure you can be, and nudging it would invent evidence", () => {
     for (const days of [1, 30, 365, 5000]) {
       expect(decay(sharp, days).rating).toBe(sharp.rating);
     }
@@ -27,23 +35,17 @@ describe("uncertainty grows with days away, not with sessions", () => {
     }
   });
 
-  it("a well-measured rating reaches the unrated deviation after a year", () => {
-    // The judgement call in `decay.ts`, pinned so changing it is deliberate.
+  it("a well-measured rating reaches the unrated deviation after a year, which is decay.ts's judgement call pinned", () => {
     expect(decay(sharp, 365).deviation).toBeCloseTo(INITIAL_DEVIATION, 0);
   });
 
-  it("and never exceeds it, however long the absence", () => {
-    // Past the unrated deviation the system knows nothing about the player, and
-    // there is nothing further to forget.
+  it("and never exceeds it, however long the absence, because there is nothing further to forget", () => {
     for (const days of [400, 1000, 100_000]) {
       expect(decay(sharp, days).deviation).toBe(INITIAL_DEVIATION);
     }
   });
 
   it("an inactive player does decay — the whole point of counting days", () => {
-    // With the session as the rating period, a child who never opens the app
-    // has no periods, so a per-period decay would leave a year-old rating
-    // looking as certain as yesterday's.
     expect(decay(sharp, 365).deviation).toBeGreaterThan(sharp.deviation * 6);
   });
 
@@ -59,9 +61,7 @@ describe("uncertainty grows with days away, not with sessions", () => {
     expect(Math.fround(aged.rating)).toBe(aged.rating);
   });
 
-  it("a fractional day is not rounded away", () => {
-    // Elapsed time arrives as a real quantity; truncating to whole days would
-    // make a player who returns twice a day never decay at all.
+  it("a fractional day is not rounded away, or a player returning twice a day would never decay", () => {
     expect(decay(sharp, 0.5).deviation).toBeGreaterThan(sharp.deviation);
     expect(decay(sharp, 0.5).deviation).toBeLessThan(decay(sharp, 1).deviation);
   });

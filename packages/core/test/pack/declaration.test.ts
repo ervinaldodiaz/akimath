@@ -15,23 +15,23 @@ const valid = (over: Record<string, unknown> = {}): unknown => ({
   ...over,
 });
 
+/**
+ * The seed base parses to a bigint, because `TemplateRef.seed` is one and JSON
+ * has no such type — so the declaration spells it as a string and the parser is
+ * where it stops being one. A number would silently lose precision past 2^53.
+ */
 describe("a declaration says what to build", () => {
   it("reads the salt, the seed base, the window and the sources", () => {
     const d = parseDeclaration(valid());
 
     expect(d.packSalt).toBe("a1b2c3d4e5f60718293a4b5c6d7e8f90");
-    // A bigint, because `TemplateRef.seed` is one and JSON has no such type —
-    // so the declaration spells it as a string and the parser is where it
-    // stops being one. A number would silently lose precision past 2^53.
     expect(d.seedBase).toBe(1000n);
     expect(d.sources).toHaveLength(2);
     expect(d.sources[0]).toMatchObject({ kind: "template", count: 5 });
     expect(d.sources[1]).toMatchObject({ kind: "authored" });
   });
 
-  it("keeps the sources in the order they were declared", () => {
-    // Order is the pack's order, and the pack's order is what the player meets
-    // first. It is a product decision, so it survives parsing.
+  it("keeps the declared order, because the pack's order is a product decision", () => {
     const d = parseDeclaration(
       valid({
         sources: [
@@ -51,6 +51,18 @@ describe("a declaration says what to build", () => {
   });
 });
 
+/**
+ * A malformed declaration is refused, naming the field.
+ *
+ * One case per thing a hand-edited declaration can get wrong, each paired with
+ * the token the refusal has to carry. The field is in the message because a
+ * declaration is content a person edits by hand, and "invalid declaration"
+ * sends them reading the whole file.
+ *
+ * Shape and range are different checks, and a regex alone passes every
+ * timestamp below. The falsification pass found them: loosening the day bound
+ * left every other case green.
+ */
 describe("a malformed declaration is refused, naming the field", () => {
   const cases: ReadonlyArray<readonly [string, Record<string, unknown>, string]> = [
     ["a salt that is not 32 hex characters", { pack_salt: "nope" }, "pack_salt"],
@@ -59,9 +71,6 @@ describe("a malformed declaration is refused, naming the field", () => {
     ["a seed base that is not a number at all", { seed_base: "many" }, "seed_base"],
     ["a window that ends before it starts", { expires_at: "2026-01-01T00:00:00.000Z" }, "expires_at"],
     ["a timestamp that is not a timestamp", { issued_at: "last tuesday" }, "issued_at"],
-    // Shape and range are different checks, and a regex alone passes all of
-    // these. The falsification pass found them: loosening the day bound left
-    // every other case green.
     ["a thirteenth month", { issued_at: "2026-13-01T00:00:00.000Z" }, "issued_at"],
     ["a thirty-first of February", { issued_at: "2026-02-31T00:00:00.000Z" }, "issued_at"],
     ["a zeroth day", { issued_at: "2026-01-00T00:00:00.000Z" }, "issued_at"],
@@ -79,9 +88,6 @@ describe("a malformed declaration is refused, naming the field", () => {
 
   for (const [name, over, field] of cases) {
     it(name, () => {
-      // The field is in the message because a declaration is content a person
-      // edits by hand, and "invalid declaration" sends them reading the whole
-      // file.
       expect(() => parseDeclaration(valid(over))).toThrow(new RegExp(field));
     });
   }
@@ -93,6 +99,19 @@ describe("a malformed declaration is refused, naming the field", () => {
   });
 });
 
+/**
+ * One fact, one place.
+ *
+ * The template knows which skill it exercises (`Template.skillId`). A
+ * declaration that says so too is a second place to be wrong, and the wrong one
+ * would be the pack's — items filed under a skill their template does not
+ * exercise, rated against the wrong `user_skills` row. Refused rather than
+ * ignored, because an ignored field looks like it works.
+ *
+ * It is also gone from the parsed shape rather than merely unread: `build.ts`
+ * resolves the skill from the template, and a `skillId` surviving here would
+ * give it something to prefer.
+ */
 describe("a template source does not state its skill", () => {
   const templateSource = (over: Record<string, unknown> = {}) => ({
     kind: "template",
@@ -103,22 +122,14 @@ describe("a template source does not state its skill", () => {
     ...over,
   });
 
-  it("reads one that omits it", () => {
+  it("reads one that omits it, and drops the field rather than leaving it unread", () => {
     const d = parseDeclaration(valid({ sources: [templateSource()] }));
 
     expect(d.sources[0]).toMatchObject({ kind: "template", templateId: "arith.integer.subtract" });
-    // The field is gone from the parsed shape, not merely unread — `build.ts`
-    // resolves it from the template, and leaving a `skillId` here would give it
-    // something to prefer.
     expect(d.sources[0]).not.toHaveProperty("skillId");
   });
 
   it("and refuses one that states it, rather than ignoring it", () => {
-    // The template knows which skill it exercises (`Template.skillId`). A
-    // declaration that says so too is a second place to be wrong, and the wrong
-    // one would be the pack's — items filed under a skill their template does
-    // not exercise, rated against the wrong `user_skills` row. Refused rather
-    // than ignored, because an ignored field looks like it works.
     expect(() => parseDeclaration(valid({ sources: [templateSource({ skill_id: 1 })] })))
       .toThrow(/skill_id/);
   });

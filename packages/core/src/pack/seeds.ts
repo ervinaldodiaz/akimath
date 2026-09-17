@@ -19,6 +19,13 @@
 export const INT64_MAX = 9223372036854775807n;
 export const INT64_MIN = -9223372036854775808n;
 
+/**
+ * The seed of the *n*th generated item: `base + n`.
+ *
+ * **There is no second bound on `base`.** It is checked through the same
+ * arithmetic as every other index — an out-of-range base fails at index 0 — so
+ * there is no separate check to keep in step with this one.
+ */
 export function seedAt(base: bigint, index: number): bigint {
   if (!Number.isInteger(index) || index < 0) {
     throw new RangeError(`seed index must be a non-negative integer, got ${index}`);
@@ -30,7 +37,5 @@ export function seedAt(base: bigint, index: number): bigint {
         `a base of ${base} leaves room for fewer than ${index + 1} items`,
     );
   }
-  // The base itself is checked through the same arithmetic: an out-of-range
-  // base fails at index 0, so there is no second bound to keep in step.
   return seed;
 }

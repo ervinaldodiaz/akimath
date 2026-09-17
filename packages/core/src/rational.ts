@@ -48,19 +48,20 @@ function gcd(a: bigint, b: bigint): bigint {
  * Frozen at runtime, not merely `readonly` in the types: `readonly` is erased at
  * build, so a caller in plain JavaScript — or a caller that has cast the type
  * away — can reshape a value another module is still holding.
+ *
+ * **Zero needs no special case, and an earlier version of this function had
+ * one.** It was guarded by a comment claiming the general path would give
+ * `0/-1` for a negative denominator, and that was simply untrue: `gcd(0, d)` is
+ * `|d|`, so the reduction yields `0/1` whatever the sign, and the branch was
+ * dead code behind a false explanation. The mutation report found it — killing
+ * the branch changed no behaviour — and `rationalOf(0n, -5n)` is pinned in the
+ * suite, so the property stays checked without the code that pretended to
+ * provide it.
  */
 export function rationalOf(numerator: bigint, denominator = 1n): Rational {
   if (denominator === 0n) {
     throw new RangeError("a rational needs a non-zero denominator");
   }
-  // **Zero needs no special case, and an earlier version of this function had
-  // one.** It carried a comment claiming the general path would give `0/-1` for
-  // a negative denominator. That was simply untrue: `gcd(0, d)` is `|d|`, so the
-  // reduction below yields `0/1` whatever the sign, and the branch was dead
-  // code guarded by a false explanation. The mutation report found it — killing
-  // the branch changed no behaviour — and `rationalOf(0n, -5n)` is pinned in the
-  // suite so the property stays checked without the code that pretended to
-  // provide it.
   const sign = denominator < 0n ? -1n : 1n;
   const divisor = gcd(numerator, denominator);
 
@@ -91,12 +92,16 @@ export function multiply(left: Rational, right: Rational): Rational {
   );
 }
 
+/**
+ * `left` divided by `right`.
+ *
+ * A zero divisor is named explicitly rather than left to fall through: without
+ * that guard the denominator below becomes zero and `rationalOf` throws about a
+ * *denominator*, which is true of the intermediate and says nothing about what
+ * the caller did.
+ */
 export function divide(left: Rational, right: Rational): Rational {
   if (right.numerator === 0n) {
-    // Named explicitly rather than left to fall through: without this the
-    // denominator below becomes zero and `rationalOf` throws about a
-    // *denominator*, which is true of the intermediate and says nothing about
-    // what the caller did.
     throw new RangeError("cannot divide a rational by zero");
   }
   return rationalOf(
@@ -105,9 +110,15 @@ export function divide(left: Rational, right: Rational): Rational {
   );
 }
 
+/**
+ * The reciprocal, which zero does not have.
+ *
+ * Zero is named explicitly for the same reason `divide` names it: the
+ * fall-through error would blame a *denominator*, which is true of the
+ * intermediate and says nothing about what the caller did.
+ */
 export function reciprocal(value: Rational): Rational {
   if (value.numerator === 0n) {
-    // Same reason as `divide`: the fall-through error would blame a denominator.
     throw new RangeError("zero has no reciprocal");
   }
   return rationalOf(value.denominator, value.numerator);
@@ -141,8 +152,12 @@ export function compare(left: Rational, right: Rational): number {
   return difference < 0n ? -1 : 1;
 }
 
+/**
+ * Whether two rationals are the same value.
+ *
+ * Normal form makes this a field comparison rather than a cross-multiplication.
+ */
 export function equals(left: Rational, right: Rational): boolean {
-  // Normal form makes this a field comparison rather than a cross-multiplication.
   return (
     left.numerator === right.numerator && left.denominator === right.denominator
   );

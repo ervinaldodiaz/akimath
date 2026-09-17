@@ -69,10 +69,38 @@ const THE_SPELLER = "renderCanonicalAnswer";
  * would have nothing to add. This is also where #50's second half landed: the
  * guard that drops a distractor equal to the right answer compares strings, so
  * what this file renders has to be the same spelling the item's answer got.
+ *
+ * **Named rather than matched, and the name is checked** — PROC-10 on the
+ * allowlist itself. A carve-out for a file that has since been renamed excuses
+ * nothing and hides that it is stale, so the suite asserts the path is still on
+ * disk.
  */
 const MAY_SPELL_BY_HAND: readonly string[] = ["pack/distractors.ts"];
 
+/**
+ * The tree this gate walks, resolved from `import.meta.url` rather than from the
+ * working directory.
+ *
+ * **PROC-10 is why the walk's own size is asserted.** Stryker copies the package
+ * into a sandbox one level deeper, so a root resolved by counting `..` segments
+ * can quietly land on nothing — and a walk over zero files reports no violations,
+ * which is indistinguishable from a walk that found none.
+ */
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
+
+/**
+ * A source that commits both prohibitions, so the walker can be shown to see
+ * them.
+ *
+ * **The control.** Every other assertion in this file passes for a walker that
+ * finds nothing *because it is broken*, and the two outcomes are
+ * indistinguishable without this. Both violations are here rather than one,
+ * because the two are found by different code.
+ */
+const PROBE_COMMITTING_BOTH_VIOLATIONS = [
+  'const shape = answer.includes("/") ? "fraction" : "integer";',
+  "const spelled = renderCanonicalAnswer(numerator, denominator);",
+].join("\n");
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
@@ -86,6 +114,26 @@ interface Sighting {
   readonly file: string;
   readonly line: number;
   readonly what: string;
+}
+
+/**
+ * A sighting naming *every* shape word's line, or null when only some are named.
+ *
+ * The **pair** is the violation, so the report gives both positions. Naming one
+ * half of it points a reader at whichever word came first — here, at a stimulus
+ * term parser that shares the vocabulary and is not the offender at all.
+ */
+function shapeDecidedByHand(
+  file: string,
+  wordLines: ReadonlyMap<string, number>,
+): Sighting | null {
+  if (wordLines.size !== SHAPE_WORDS.length) return null;
+  const where = [...wordLines].map(([word, line]) => `${word}@${line}`).join(", ");
+  return {
+    file,
+    line: Math.min(...wordLines.values()),
+    what: `decides an answer shape by hand (${where})`,
+  };
 }
 
 /**
@@ -126,17 +174,8 @@ function scan(file: string): Sighting[] {
   };
   visit(source);
 
-  // Every shape word's line, because the *pair* is the violation and naming one
-  // half of it points a reader at whichever came first — here, at a stimulus
-  // term parser that is not the offender at all.
-  if (wordLines.size === SHAPE_WORDS.length) {
-    const where = [...wordLines].map(([word, line]) => `${word}@${line}`).join(", ");
-    sightings.push({
-      file: relative,
-      line: Math.min(...wordLines.values()),
-      what: `decides an answer shape by hand (${where})`,
-    });
-  }
+  const byHand = shapeDecidedByHand(relative, wordLines);
+  if (byHand) sightings.push(byHand);
   return sightings;
 }
 
@@ -144,15 +183,11 @@ describe("there is one way to spell a stored answer", () => {
   const files = sourceFiles(SRC);
 
   it("reports what it scanned, and scanning nothing is a failure", () => {
-    // PROC-10. This gate resolves its root from `import.meta.url`, which
-    // Stryker's sandbox relocates, and a walk over zero files is green.
     expect(files.length).toBeGreaterThan(0);
     console.log(`  one way to spell an answer · scanned ${files.length} source file(s)`);
   });
 
-  it("the file allowed to spell by hand is still there", () => {
-    // PROC-10 again, on the allowlist: a named carve-out for a file that has
-    // been renamed silently excuses nothing and hides that it is stale.
+  it("the file allowed to spell by hand is still there, so the carve-out cannot go stale", () => {
     const relatives = files.map((f) => path.relative(SRC, f).split(path.sep).join("/"));
     expect(relatives).toEqual(expect.arrayContaining([...MAY_SPELL_BY_HAND]));
   });
@@ -165,16 +200,10 @@ describe("there is one way to spell a stored answer", () => {
     ).toEqual([]);
   });
 
-  it("sees both violations when they are there", () => {
-    // The control. Every assertion above passes for a walker that finds
-    // nothing because it is broken, and the two are indistinguishable without
-    // this. Both prohibitions, because they are found by different code.
+  it("the walker is not broken: it sees both violations when they are there", () => {
     const probe = ts.createSourceFile(
       "probe.ts",
-      [
-        'const shape = answer.includes("/") ? "fraction" : "integer";',
-        "const spelled = renderCanonicalAnswer(numerator, denominator);",
-      ].join("\n"),
+      PROBE_COMMITTING_BOTH_VIOLATIONS,
       ts.ScriptTarget.ES2023,
       true,
     );

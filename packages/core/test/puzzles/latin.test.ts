@@ -7,6 +7,28 @@ const rows = (square: readonly (readonly number[])[]): readonly (readonly number
 const columns = (square: readonly (readonly number[])[]): readonly number[][] =>
   square[0]!.map((_, col) => square.map((row) => row[col]!));
 
+/**
+ * Twelve squares off consecutive seeds, serialized.
+ *
+ * A cyclic square used unshuffled would satisfy every other assertion here and
+ * make every KenKen in the pack the same puzzle wearing different cages, so
+ * what is worth asserting is that the twelve are not all one square.
+ */
+const twelveSquaresAsJson = (size: number): readonly string[] =>
+  Array.from({ length: 12 }, (_, i) => JSON.stringify(latinSquare(BigInt(i), size)));
+
+/**
+ * The square `latinSquare` would return if it never shuffled — symbol
+ * `(row + col) % size`, the same diagonal in every one.
+ *
+ * Named explicitly, because "more than one square" would still pass for a
+ * shuffle that only ever permuted symbols and left that structure standing.
+ */
+const cyclicSquare = (size: number): readonly (readonly number[])[] =>
+  Array.from({ length: size }, (_, row) =>
+    Array.from({ length: size }, (_, col) => ((row + col) % size) + 1),
+  );
+
 describe("a generated square is Latin", () => {
   it("every row and every column is a permutation, at every supported size", () => {
     for (let size = 3; size <= 6; size += 1) {
@@ -25,23 +47,13 @@ describe("a generated square is Latin", () => {
   });
 
   it("the square is not always the same one", () => {
-    // A cyclic square used unshuffled would satisfy every assertion above and
-    // make every KenKen in the pack the same puzzle wearing different cages.
-    const seen = new Set(
-      Array.from({ length: 12 }, (_, i) => JSON.stringify(latinSquare(BigInt(i), 4))),
-    );
-    expect(seen.size).toBeGreaterThan(1);
+    expect(new Set(twelveSquaresAsJson(4)).size).toBeGreaterThan(1);
   });
 
   it("it is not the cyclic square", () => {
-    // Named explicitly, because "more than one" would still pass if the
-    // shuffle only ever permuted symbols and left the diagonal structure.
-    const cyclic = Array.from({ length: 4 }, (_, r) =>
-      Array.from({ length: 4 }, (_, c) => ((r + c) % 4) + 1),
-    );
-    const squares = Array.from({ length: 12 }, (_, i) => latinSquare(BigInt(i), 4));
+    const cyclic = JSON.stringify(cyclicSquare(4));
 
-    expect(squares.some((s) => JSON.stringify(s) !== JSON.stringify(cyclic))).toBe(true);
+    expect(twelveSquaresAsJson(4).some((square) => square !== cyclic)).toBe(true);
   });
 
   it("a size below three has no board to make", () => {

@@ -40,6 +40,10 @@ const build = (count: number, misconceptions = MISCONCEPTIONS) =>
     },
   );
 
+/**
+ * The mutation pass is why the not-an-object case exists: that branch was never
+ * exercised, and deleting it entirely left every other test here green.
+ */
 describe("the copy file is content, and it is checked like content", () => {
   it("keys every entry by its own misconception id", () => {
     for (const [id, copy] of MISCONCEPTIONS) {
@@ -49,8 +53,6 @@ describe("the copy file is content, and it is checked like content", () => {
   });
 
   it("refuses something that is not an object keyed by identifier", () => {
-    // Never exercised until the mutation pass: deleting this branch entirely
-    // left every test green.
     for (const junk of [null, [], "text", 42]) {
       expect(() => parseMisconceptions(junk)).toThrow(/object keyed by identifier/);
     }
@@ -60,9 +62,7 @@ describe("the copy file is content, and it is checked like content", () => {
     expect(() => parseMisconceptions({})).toThrow(/declares none/);
   });
 
-  it("refuses more steps than the frozen copy schema admits", () => {
-    // One to four. Five is a wall of text on a screen with room for a couple
-    // of lines, and the frozen schema refuses it anyway.
+  it("refuses a fifth step, a wall of text where the screen has room for two lines", () => {
     expect(() =>
       parseMisconceptions({ a: { steps: ["1", "2", "3", "4", "5"], explain: "b" } }),
     ).toThrow(/steps/);
@@ -99,11 +99,18 @@ describe("the copy file is content, and it is checked like content", () => {
   });
 });
 
+/**
+ * The same list the verdict screens are held to, matched the same way — as
+ * substrings, which is why "normal" and "errores" are out too. The sweep
+ * reports its size, so a sweep that walks nothing cannot pass (PROC-10).
+ *
+ * **And it has its control.** Every assertion here passes for a sweep that is
+ * simply broken, so one case hands it a scolding that is really there. What
+ * comes back names the word *and* the text, because "something scolds somewhere
+ * in the copy file" is not a message anyone can act on.
+ */
 describe("the shipped copy never scolds", () => {
   it("contains none of the words the verdict screens are held to", () => {
-    // The same list, matched the same way — as substrings, which is why
-    // "normal" and "errores" are out too. Reported, so a sweep that walks
-    // nothing cannot pass (PROC-10).
     const strings = copyStrings(MISCONCEPTIONS);
     // eslint-disable-next-line no-console
     console.log(
@@ -114,16 +121,12 @@ describe("the shipped copy never scolds", () => {
   });
 
   it("sees a scolding that is there, and says which word and where", () => {
-    // The control: every assertion above passes for a sweep that is broken.
-    // It reports the word *and* the text, because "something scolds somewhere
-    // in the copy file" is not a message anyone can act on.
     expect(scoldings(["Eso estuvo mal."])).toEqual(['"mal" in "Eso estuvo mal."']);
     expect(scoldings(["Hubo un error."])).toEqual(['"error" in "Hubo un error."']);
     expect(scoldings(["Vas muy bien."])).toEqual([]);
   });
 
-  it("catches every word on the list, not merely the first", () => {
-    // Each entry is checked on its own, so emptying any one of them shows up.
+  it("catches every word on the list on its own, so emptying one shows up", () => {
     for (const word of FORBIDDEN_WORDS) {
       expect(scoldings([`texto ${word} texto`])).toHaveLength(1);
     }
@@ -135,6 +138,12 @@ describe("the shipped copy never scolds", () => {
   });
 });
 
+/**
+ * A prediction that coincides with the right answer is dropped rather than
+ * emitted: `4 − 4` makes "reversed" and the answer the same number, and
+ * emitting it would be `distractor_matches_answer`, failing a whole build over
+ * arithmetic rather than over a mistake.
+ */
 describe("a wrong answer a learner actually gives is recognised", () => {
   it("predicts reversing the subtraction and reading the sign as a plus", () => {
     const item = {
@@ -149,9 +158,6 @@ describe("a wrong answer a learner actually gives is recognised", () => {
   });
 
   it("drops a prediction that coincides with the right answer", () => {
-    // `4 − 4` makes "reversed" and the answer the same number. Emitting it
-    // would be `distractor_matches_answer` and the whole build would fail over
-    // arithmetic rather than over a mistake.
     const item = {
       prompt: [], ladderStep: 1, operator: "-" as const,
       left: { num: 4, den: 1 }, right: { num: 4, den: 1 },
@@ -172,6 +178,23 @@ describe("a wrong answer a learner actually gives is recognised", () => {
   });
 });
 
+/**
+ * **req-diagnosis-distractors-are-distinct, asserted as an outcome.**
+ *
+ * The spec words it as "the pack is refused". The builder achieves the same end
+ * by not producing one: `4 − 4` makes "reversed" and the right answer the same
+ * number, and failing a whole build over arithmetic that happens to coincide
+ * would be a gate people route around. The frozen validator still refuses such
+ * a pack — what is proved below is that the builder never hands it one, swept
+ * over every item rather than over a constructed example.
+ *
+ * A distractor's digest is recomputed independently rather than shape-checked,
+ * because a digest of the wrong string satisfies a shape check — the hole
+ * `lift.test.ts` already had once.
+ *
+ * Authoring copy for one family must not block shipping the others, so an item
+ * with no distractors at all still yields a valid pack.
+ */
 describe("what a built pack carries", () => {
   it("attaches a distractor's copy by misconception", () => {
     const { pack } = build(5);
@@ -187,13 +210,11 @@ describe("what a built pack carries", () => {
     }
   });
 
-  it("digests a distractor over the same salt as the answer", () => {
+  it("digests a distractor over the same salt, recomputed rather than shape-checked", () => {
     const { pack } = build(1);
     const first = pack.items[0];
     const distractors = first?.diagnosis?.distractors ?? [];
 
-    // Recomputed independently — a digest of the wrong string would satisfy a
-    // shape check, which is the hole the lift's tests already had once.
     expect(distractors.length).toBeGreaterThan(0);
     for (const d of distractors) {
       expect(d.digest).toMatch(/^[0-9a-f]{64}$/u);
@@ -202,13 +223,6 @@ describe("what a built pack carries", () => {
   });
 
   it("never emits a distractor that matches the answer, or two that match each other", () => {
-    // **req-diagnosis-distractors-are-distinct, asserted as an outcome.**
-    // The spec words it as "the pack is refused". The builder achieves the same
-    // end by not producing one: `4 − 4` makes "reversed" and the right answer
-    // the same number, and failing a whole build over arithmetic that happens
-    // to coincide would be a gate people route around. The frozen validator
-    // still refuses such a pack — this proves the builder never hands it one,
-    // swept over every item rather than over a constructed example.
     const { pack } = build(40);
     let checked = 0;
     for (const item of pack.items) {
@@ -224,9 +238,7 @@ describe("what a built pack carries", () => {
     expect(() => build(1, new Map())).toThrow(/no copy for misconception/);
   });
 
-  it("reports how much of the pack is diagnosed", () => {
-    // The gap between "the format supports it" and "the content exists" stays
-    // visible rather than being assumed closed.
+  it("reports how much of the pack is diagnosed, so the gap stays visible", () => {
     const { report, pack } = build(5);
     // eslint-disable-next-line no-console
     console.log(
@@ -237,7 +249,6 @@ describe("what a built pack carries", () => {
   });
 
   it("an item with no distractors still yields a valid pack", () => {
-    // Authoring copy for one family must not block shipping the others.
     const { pack, report } = buildPack(
       parseDeclaration({
         pack_salt: SALT, seed_base: "1", 

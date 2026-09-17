@@ -15,7 +15,21 @@ import {
  *
  * `test/pack/cli.test.ts` used to point the build script at a copy file with no
  * fallback and assert it exited 1. That scenario cannot happen any more — there
- * is no file to point at — so the guarantee moved here rather than evaporating.
+ * is no file to point at — so the guarantee moved here rather than evaporating:
+ * `fallbackDiagnosis()` throws rather than handing back undefined, and the case
+ * below holds it to that. `missing_skill_fallback` is a frozen rejection tag, so
+ * a skill with items and no fallback makes the whole pack invalid — which is why
+ * the fallback is checked at load and not at the moment a request needs it.
+ *
+ * **Every claim here has its control**, because "the copy parses" is otherwise a
+ * claim about a parser that might accept anything.
+ *
+ * The one rule the copy itself has to keep is that Aki does not tell a learner
+ * off, and that is asked of the module's own list of words rather than of a
+ * regex written here: a second list is a second thing to keep in agreement, and
+ * this one would quietly stop matching the day a word is added. The anchors on
+ * the identifier pattern are load-bearing the same way they are in the server's
+ * uuid patterns — without `^` and `$` a key with anything around it passes.
  */
 describe("the diagnosis copy is validated, not trusted", () => {
   it("parses, and reports how many entries it checked", () => {
@@ -36,35 +50,24 @@ describe("the diagnosis copy is validated, not trusted", () => {
   });
 
   it("and the parser still refuses what it always refused", () => {
-    // The control. Without it, "the copy parses" is a claim about a parser that
-    // might accept anything.
     expect(() => parseMisconceptions({ "Not Snake Case": { steps: ["x"], explain: "y" } }))
       .toThrow(/snake_case/);
     expect(() => parseMisconceptions("nope")).toThrow(/must be an object/);
   });
 
   it("the fallback exists, because a pack without one is refused", () => {
-    // `missing_skill_fallback` is a frozen rejection tag: a skill with items and
-    // no fallback makes the whole pack invalid. So this is not decoration, and
-    // it is checked at load rather than at the moment a request needs it.
     expect(misconceptionCopy().has(FALLBACK_MISCONCEPTION)).toBe(true);
     expect(fallbackDiagnosis().steps.length).toBeGreaterThan(0);
     expect(fallbackDiagnosis().explain).not.toBe("");
   });
 
   it("and nothing in it scolds", () => {
-    // The one rule the copy itself has to keep: Aki does not tell a learner off.
-    // Asked of the module's own list rather than of a regex written here — a
-    // second list is a second thing to keep in agreement, and this one would
-    // quietly stop matching the day a word is added.
     for (const [id, copy] of misconceptionCopy()) {
       expect(scoldings([copy.explain, ...copy.steps]), id).toEqual([]);
     }
   });
 
-  it("every forbidden word is a word that actually gets caught", () => {
-    // Each entry, one at a time. Blanking any of them left the list shorter and
-    // every test still green, which is a list that only looks like a rule.
+  it("every forbidden word is caught on its own, so blanking one cannot pass", () => {
     expect(FORBIDDEN_WORDS.length).toBeGreaterThan(0);
     for (const word of FORBIDDEN_WORDS) {
       expect(scoldings([`Eso estuvo ${word} otra vez`]), word).toHaveLength(1);
@@ -76,26 +79,20 @@ describe("the diagnosis copy is validated, not trusted", () => {
     console.log(`  scolding sweep · ${FORBIDDEN_WORDS.length} forbidden word(s), each proven`);
   });
 
-  it("it catches a word inside another and reports where", () => {
-    // Substrings on purpose: "errores" and "normal" carry "error" and "mal",
-    // and copy that says either has still said it.
+  it("it catches a forbidden word inside a longer one on purpose, and reports where", () => {
     expect(scoldings(["hubo errores"])).toEqual(['"error" in "hubo errores"']);
     expect(scoldings(["ESO ESTUVO MAL"])).toHaveLength(1);
     expect(scoldings(["todo bien"])).toEqual([]);
     expect(scoldings([])).toEqual([]);
   });
 
-  it("a key that is not exactly an identifier is refused", () => {
-    // The `^` and `$` are load-bearing, the same way they were in the server's
-    // uuid patterns: without them a key with anything around it passes.
+  it("a key is refused unless it is exactly an identifier, and one letter is one", () => {
     for (const key of ["Uppercase", "1leading_digit", " leading_space", "trailing ", "has-dash", ""]) {
       expect(
         () => parseMisconceptions({ [key]: { steps: ["x"], explain: "y" } }),
         JSON.stringify(key),
       ).toThrow(/snake_case/);
     }
-    // And a single letter is a valid identifier, so the rule is not "at least
-    // two characters" by accident.
     expect(parseMisconceptions({ a: { steps: ["x"], explain: "y" } }).size).toBe(1);
   });
 });

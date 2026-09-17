@@ -197,6 +197,15 @@ function switchKind(
   }
 }
 
+/**
+ * Reads the flags, generates the batch and writes the boards.
+ *
+ * **The batch is written through a temporary file.** `> out` truncates before
+ * the producer has run, so a refusal used to leave the committed artifact
+ * destroyed. A failed write unlinks the temporary and rethrows, and if that
+ * unlink also fails there is nothing to clean up: the original is untouched
+ * either way.
+ */
 function main(): void {
   const kind = requireKind(flag("kind", "kenken"));
   const size = requirePositive("size", flag("size", "4"));
@@ -206,9 +215,6 @@ function main(): void {
 
   const batch: Batch = switchKind(kind, size, count, firstSeed);
 
-  // **Written through a temporary file**, for the reason `build-pack.ts`
-  // records: `> out` truncates before the producer has run, so a refusal used
-  // to leave the committed artifact destroyed.
   mkdirSync(path.dirname(out), { recursive: true });
   const temporary = `${out}.tmp`;
   try {
@@ -217,9 +223,7 @@ function main(): void {
   } catch (cause) {
     try {
       unlinkSync(temporary);
-    } catch {
-      // Nothing to clean up. The original is untouched either way.
-    }
+    } catch {}
     throw cause;
   }
 

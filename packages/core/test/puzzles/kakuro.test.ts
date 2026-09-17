@@ -1,3 +1,12 @@
+/**
+ * The Kakuro generator: the clues it computes, the cells it prints and the
+ * boards it refuses.
+ *
+ * Order is part of the payload here. The pack is byte-diffed, so a payload
+ * whose shape followed draw order would make an unrelated regeneration look
+ * like a content change.
+ */
+
 import { parsePuzzle } from "@akimath/contract";
 import { describe, expect, it } from "vitest";
 
@@ -39,7 +48,54 @@ function made(size: number): Payload[] {
     .map((c) => c.payload as unknown as Payload);
 }
 
+/**
+ * Every refusal tag a run of seeds produced, boards dropped.
+ *
+ * `a_cell_belongs_to_no_run` is the commonest, and it has to be tellable from
+ * a solver rejection: one means the blocked pattern was unlucky, the other
+ * means the board had more than one answer.
+ */
+function refusals(size: number): string[] {
+  return SEEDS.map((seed) => kakuroCandidate(BigInt(seed), size)).filter(
+    (c): c is string => typeof c === 'string',
+  );
+}
+
 const key = (cell: Cell): string => `${cell.row},${cell.col}`;
+
+/**
+ * Every cell of a board that is not blocked.
+ *
+ * Unlike a cage, a Kakuro cell belongs to a horizontal run *and* a vertical
+ * one, so coverage is not a partition; a cell in neither run can never be
+ * deduced, which the contract calls `cage_coverage_incomplete`.
+ */
+function openCells(payload: Payload, size: number): Cell[] {
+  const blocked = new Set(payload.board.blocked.map(key));
+  const open: Cell[] = [];
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      if (!blocked.has(`${row},${col}`)) {
+        open.push({ row, col });
+      }
+    }
+  }
+  return open;
+}
+
+/**
+ * The share of a board's open cells that come printed.
+ *
+ * Measured: the jump is between 0.35 and 0.5, and the fraction that rescues a
+ * 5×5 would hand a 3×3 over. Asserted against the *fraction* rather than
+ * against one board's count, which varies with how many cells the blocked
+ * pattern happened to take.
+ */
+const printedShare = (size: number): number => {
+  const payload = made(size)[0]!;
+  const open = size * size - payload.board.blocked.length;
+  return payload.board.given.length / open;
+};
 
 describe("the clues are true by construction", () => {
   it("every run's sum is what its cells hold", () => {
@@ -59,8 +115,7 @@ describe("the clues are true by construction", () => {
     expect(checked, 'no candidate was produced at all').toBeGreaterThan(0);
   }, 120_000);
 
-  it("no run repeats a digit", () => {
-    // The format's own rule, and the one the fill exists to satisfy.
+  it("no run repeats a digit, the rule the fill exists to satisfy", () => {
     for (const size of [3, 4, 5, 6]) {
       for (const payload of made(size)) {
         for (const run of payload.runs) {
@@ -91,39 +146,23 @@ describe("the clues are true by construction", () => {
 
 describe("runs cross, so coverage is not a partition", () => {
   it("every open cell is in at least one run", () => {
-    // Unlike a cage, a Kakuro cell belongs to a horizontal run *and* a vertical
-    // one, and a cell in neither can never be deduced — the contract calls that
-    // `cage_coverage_incomplete`.
     for (const size of [3, 4, 5, 6]) {
       for (const payload of made(size)) {
         const covered = new Set(payload.runs.flatMap((r) => r.cells.map(key)));
-        const blocked = new Set(payload.board.blocked.map(key));
 
-        for (let row = 0; row < size; row += 1) {
-          for (let col = 0; col < size; col += 1) {
-            if (blocked.has(`${row},${col}`)) {
-              continue;
-            }
-            expect(covered.has(`${row},${col}`), `${size}×${size} (${row},${col})`)
-                .toBe(true);
-          }
+        for (const { row, col } of openCells(payload, size)) {
+          expect(covered.has(`${row},${col}`), `${size}×${size} (${row},${col})`)
+              .toBe(true);
         }
       }
     }
   }, 120_000);
 
   it("a cell belonging to no run is refused by name, before the fill", () => {
-    // The commonest refusal, and it has to be tellable from a solver rejection:
-    // one means the blocked pattern was unlucky, the other means the board had
-    // more than one answer.
-    const refusals = SEEDS.map((seed) => kakuroCandidate(BigInt(seed), 5))
-      .filter((c): c is string => typeof c === 'string');
-
-    expect(refusals).toContain('a_cell_belongs_to_no_run');
+    expect(refusals(5)).toContain('a_cell_belongs_to_no_run');
   });
 
-  it("some cells are in two runs, or this is not Kakuro", () => {
-    // A board whose runs never crossed would be a row of unrelated sums.
+  it("some cells are in two runs, not a row of unrelated sums", () => {
     const payload = made(5)[0]!;
     const seen = new Map<string, number>();
     for (const run of payload.runs) {
@@ -144,26 +183,28 @@ describe("runs cross, so coverage is not a partition", () => {
   }, 120_000);
 });
 
+/**
+ * A run of ten cells.
+ *
+ * Unreachable through `kakuroCandidate` — its runs top out at six cells —
+ * which is exactly why the guard is reached from here instead. `drawBelow` was
+ * split out of `intBetween` on the same reasoning.
+ */
+const RUN_OF_TEN: Cell[] = [
+  for0(0), for0(1), for0(2), for0(3),
+  { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 1, col: 3 },
+  { row: 2, col: 0 }, { row: 2, col: 1 },
+];
+
 describe("a board that cannot be filled says so", () => {
   it("nine distinct digits do not cover a run of ten", () => {
-    // Unreachable through `kakuroCandidate` — runs top out at six cells — which
-    // is exactly why the guard is reachable from here instead. `drawBelow` was
-    // split out of `intBetween` on the same reasoning.
-    const run: Cell[] = [
-      for0(0), for0(1), for0(2), for0(3),
-      { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 1, col: 3 },
-      { row: 2, col: 0 }, { row: 2, col: 1 },
-    ];
-
     expect(
-      fillBoard(4, () => false, [run], drawsFrom(1n)),
+      fillBoard(4, () => false, [RUN_OF_TEN], drawsFrom(1n)),
       isNullBecause('ten cells cannot hold ten distinct digits from nine'),
     ).toBeNull();
   });
 
-  it("and an ordinary board fills", () => {
-    // The control: without it the assertion above passes for a function that
-    // always returns null.
+  it("and an ordinary board fills, so null is not the only answer", () => {
     expect(
       fillBoard(
         4,
@@ -196,23 +237,11 @@ describe("what it prints", () => {
   }, 120_000);
 
   it("a small board gives away less than a larger one", () => {
-    // Measured: the jump is between 0.35 and 0.5, and the fraction that
-    // rescues a 5×5 would hand a 3×3 over. Asserted against the *fraction*
-    // rather than against one board's share, which varies with how many cells
-    // the blocked pattern happened to take.
-    const share = (size: number): number => {
-      const payload = made(size)[0]!;
-      const open = size * size - payload.board.blocked.length;
-      return payload.board.given.length / open;
-    };
-
-    expect(share(3)).toBeCloseTo(0.35, 1);
-    expect(share(5)).toBeCloseTo(0.5, 1);
+    expect(printedShare(3)).toBeCloseTo(0.35, 1);
+    expect(printedShare(5)).toBeCloseTo(0.5, 1);
   }, 120_000);
 
   it("the blocked cells come in a stable order", () => {
-    // The pack is byte-diffed; a payload whose shape followed draw order would
-    // make an unrelated regeneration look like a content change.
     for (const payload of made(5)) {
       const sorted = [...payload.board.blocked]
           .sort((a, b) => a.row - b.row || a.col - b.col);

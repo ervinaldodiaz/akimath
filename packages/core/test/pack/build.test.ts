@@ -52,6 +52,15 @@ const declaration = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+/**
+ * One template exists and five families are authored, so a wholly generated
+ * pack would offer a player one kind of question. That is what the six-family
+ * case guards, and it is the regression a source list must not reintroduce.
+ *
+ * **PROC-11.** The refusal case below asserted `not.toThrow()` first, which is
+ * a tautology: deleting the validation entirely left it green. It has to feed
+ * something invalid and watch the build refuse it.
+ */
 describe("a pack is assembled from sources", () => {
   it("carries every item from both kinds of source", () => {
     const { pack, report } = buildPack(declaration(), inputs());
@@ -63,14 +72,10 @@ describe("a pack is assembled from sources", () => {
 
   it("keeps the declared order, so the pack's order stays a product decision", () => {
     const { pack } = buildPack(declaration(), inputs());
-    // Five generated first, because the declaration says so.
     expect(pack.items.slice(0, 5).every((i) => i.stimulus.kind === "arithmetic")).toBe(true);
   });
 
   it("still offers all six families, which is the point of sources", () => {
-    // The assertion that this change cannot regress what a player sees. One
-    // template exists; five families are authored; a wholly generated pack
-    // would offer one kind of question.
     const { report } = buildPack(declaration(), inputs());
 
     // eslint-disable-next-line no-console
@@ -81,15 +86,8 @@ describe("a pack is assembled from sources", () => {
     expect(report.byFamily.size).toBe(6);
   });
 
-  it("refuses to return a pack the frozen validator rejects", () => {
-    // **PROC-11.** This asserted `not.toThrow()` first, which is a tautology:
-    // deleting the validation entirely left it green. It has to feed something
-    // invalid and watch the build refuse it.
-    //
-    // The item lifts cleanly — the lift is an envelope concern and does not
-    // read inside a payload — and is then caught by `parseStimulus` as
-    // `unknown_index_out_of_range`.
-    const broken = JSON.stringify({
+  it("refuses to return a pack the frozen validator rejects, here as `unknown_index_out_of_range` from `parseStimulus` — the lift is an envelope concern and does not read inside a payload", () => {
+    const liftsButFailsStimulusValidation = JSON.stringify({
       items: [
         {
           id: "hole-off-the-end",
@@ -103,12 +101,19 @@ describe("a pack is assembled from sources", () => {
     expect(() =>
       buildPack(declaration({ sources: [{ kind: "authored", path: "broken.json", skill_id: 1 }] }), {
         ...inputs(),
-        readAuthored: () => broken,
+        readAuthored: () => liftsButFailsStimulusValidation,
       }),
     ).toThrow(/unknown_index_out_of_range/);
   });
 });
 
+/**
+ * A hand-authored board is exactly the input where knowing *which* one is wrong
+ * saves the afternoon, because `parsePack`'s tag names only the fault.
+ *
+ * `checkCageCoverage` is the frozen validator's, and the coverage case below is
+ * what says the builder actually runs it rather than trusting the file.
+ */
 describe("a pack may carry puzzles", () => {
   const kenken = JSON.stringify({
     puzzles: [
@@ -152,35 +157,55 @@ describe("a pack may carry puzzles", () => {
     expect(report.puzzleKinds).toEqual(["kenken"]);
   });
 
-  it("reports no puzzles when none were declared", () => {
-    // The gap between "packs may carry boards" and "this one does" stays
-    // visible rather than being assumed closed.
+  it("reports no puzzles when none were declared, so the gap stays visible", () => {
     expect(buildPack(declaration(), inputs()).report.puzzleKinds).toEqual([]);
   });
 
   it("refuses a board the frozen envelope rejects, naming the puzzle", () => {
-    // A hand-authored board is exactly the input where knowing *which* one is
-    // wrong saves the afternoon — `parsePack`'s tag names only the fault.
     const missingCopy = JSON.stringify({
       puzzles: [{ kind: "kenken", payload: {}, tutorial_steps: [], reference_sheet: [] }],
     });
     expect(() => withPuzzles(missingCopy)).toThrow(/puzzle 0/);
   });
 
-  it("refuses a cage that does not cover the board", () => {
-    // `checkCageCoverage` is the frozen validator's, and this is the assertion
-    // that the builder actually runs it rather than trusting the file.
+  it("refuses a cage that does not cover the board, running the frozen validator", () => {
     const gap = JSON.parse(kenken) as { puzzles: { payload: { cages: unknown[] } }[] };
     gap.puzzles[0]!.payload.cages = [gap.puzzles[0]!.payload.cages[0]];
     expect(() => withPuzzles(JSON.stringify(gap))).toThrow();
   });
 });
 
+/**
+ * **The bug this group was written for, #50.** `answer.shape` and the spelling
+ * the digest is taken over were computed separately, and the spelling always
+ * passed a denominator — so a whole answer of −9 was stored as the digest of
+ * `-9/1` while the shape said `integer`. A player typing `-9` canonicalises to
+ * `-9`, whose digest is different, so **every generated item in the built pack
+ * was ungradeable.** Latent only because the app ships the authored pack; it
+ * would have surfaced the day the built one did. The shape is **derived from**
+ * the spelling now, by `@akimath/contract`'s `storedAnswer`, so the pack builder
+ * and the server make one decision about shape and spelling rather than two
+ * that can come apart.
+ *
+ * **The distractors are the second half of the same bug.** The guard in
+ * `distractors.ts` compares strings, so it only works if `build.ts` hands it
+ * the same spelling it digests: the correct answer went in as `0/1` while the
+ * predictions were spelled `0`, and a pack could ship a distractor telling a
+ * right answer it was a known mistake. Checked here rather than in
+ * `diagnosis.test.ts`, because the unit already passes — what needed pinning is
+ * that the builder agrees with itself, and zero distractors would make that
+ * sweep vacuous, so it reports its own count (PROC-10).
+ *
+ * **Two synthetic templates appear below, and both earn their place.** The one
+ * shipped template returns integers, so the fraction branch is unreachable
+ * through it and hardcoding the integer shape passed the whole suite; a registry
+ * of one synthetic template exercises the other side. The second declares a
+ * different `skillId`, because the declaration no longer states a skill for a
+ * template source — a template saying so is now the only way two skills can
+ * appear.
+ */
 describe("a generated answer is shaped by what the template produced", () => {
   it("calls a fractional answer a fraction", () => {
-    // The one shipped template returns integers, so the fraction branch is
-    // unreachable through it — hardcoding "integer" passed the whole suite.
-    // A registry of one synthetic template is what exercises the other side.
     const fractional: Template = {
       id: "spike.fraction",
       version: 1,
@@ -206,14 +231,6 @@ describe("a generated answer is shaped by what the template produced", () => {
   });
 
   it("and spells it the way a learner types it, so the digest matches", () => {
-    // **The bug this test was written for.** `answer.shape` and the spelling
-    // the digest is taken over were computed separately, and the spelling
-    // always passed a denominator — so a whole answer of −9 was stored as the
-    // digest of `-9/1` while the shape said `integer`. A player typing `-9`
-    // canonicalises to `-9`, whose digest is different, so **every generated
-    // item in the built pack was ungradeable.** Latent only because the app
-    // ships the authored pack; it would have surfaced the day the built one
-    // did.
     const declared = declaration({
       sources: [{ kind: "template", template_id: "arith.integer.subtract", template_version: 2, ladder_step: 3, count: 10 }],
     });
@@ -227,25 +244,17 @@ describe("a generated answer is shaped by what the template produced", () => {
         seed: seedAt(declared.seedBase, index),
         ladderStep: 3,
       });
-      // Exactly what the keypad produces: a whole number, with no denominator.
-      const typed = renderCanonicalAnswer(generated.answer.numerator);
-      const canonical = canonicalize(typed);
-      expect(canonical.ok, typed).toBe(true);
+      const typedOnTheKeypad = renderCanonicalAnswer(generated.answer.numerator);
+      const canonical = canonicalize(typedOnTheKeypad);
+      expect(canonical.ok, typedOnTheKeypad).toBe(true);
       expect(item.answer.shape).toBe("integer");
-      expect(item.answer.digest, `item ${index} answers ${typed}`).toBe(
+      expect(item.answer.digest, `item ${index} answers ${typedOnTheKeypad}`).toBe(
         answerDigest(pack.pack_salt, canonical.ok ? canonical.value : ""),
       );
     });
   });
 
   it("and no distractor it ships collides with the answer it sits beside", () => {
-    // The guard in `distractors.ts` compares strings, so it only works if
-    // `build.ts` hands it the same spelling it digests. That was the second
-    // half of the same bug: the correct answer went in as `0/1` while the
-    // predictions were spelled `0`, and a pack could ship a distractor telling
-    // a right answer it was a known mistake. Checked here rather than in
-    // `diagnosis.test.ts`, because the unit already passes — what needed
-    // pinning is that the builder agrees with itself.
     const { pack } = buildPack(declaration({
       sources: [{ kind: "template", template_id: "arith.integer.subtract", template_version: 2, ladder_step: 3, count: 10 }],
     }), inputs());
@@ -257,7 +266,6 @@ describe("a generated answer is shaped by what the template produced", () => {
         expect(distractor.digest).not.toBe(item.answer.digest);
       }
     }
-    // PROC-10: zero distractors would make the loop above vacuous.
     expect(distractors).toBeGreaterThan(0);
     console.log(`  distractor collision · checked ${distractors} distractor(s)`);
   });
@@ -270,6 +278,14 @@ describe("a generated answer is shaped by what the template produced", () => {
   });
 });
 
+/**
+ * **req-builder-deterministic.** A seed base that is accepted and then ignored
+ * would satisfy the byte-identity claim perfectly, so one case moves the base
+ * and watches the items move with it.
+ *
+ * The seed counter spans the build rather than each source: per-source counters
+ * would issue the same item twice and the pack would still look fine.
+ */
 describe("the same declaration always produces the same pack", () => {
   it("two builds are byte-identical", () => {
     const a = JSON.stringify(buildPack(declaration(), inputs()).pack);
@@ -278,16 +294,12 @@ describe("the same declaration always produces the same pack", () => {
   });
 
   it("a different seed base produces different items", () => {
-    // req-builder-deterministic. A base that is accepted and ignored would
-    // satisfy the byte-identity check above perfectly.
     const a = buildPack(declaration(), inputs()).pack.items.slice(0, 5);
     const b = buildPack(declaration({ seed_base: "999999" }), inputs()).pack.items.slice(0, 5);
     expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
   });
 
   it("two template sources never share a seed", () => {
-    // The counter spans the build, not each source. Per-source counters would
-    // issue the same item twice and the pack would look fine.
     const { pack } = buildPack(
       declaration({
         sources: [
@@ -302,23 +314,31 @@ describe("the same declaration always produces the same pack", () => {
   });
 });
 
+/**
+ * The authored answers are the ones nameable from outside the builder, so they
+ * are the ones swept for, and their count is asserted as well — a sweep that
+ * checked nothing would otherwise pass.
+ */
 describe("no answer travels in the clear", () => {
   it("no item's canonical answer appears anywhere in the pack", () => {
     const { pack } = buildPack(declaration(), inputs());
     const serialised = JSON.stringify(pack);
 
-    // The authored answers are the ones we can name from outside, so they are
-    // the ones swept for. Reported, so a sweep that checks nothing cannot pass.
-    const answers = (JSON.parse(AUTHORED) as { items: { answer: string }[] }).items.map(
+    const authoredAnswers = (JSON.parse(AUTHORED) as { items: { answer: string }[] }).items.map(
       (i) => i.answer,
     );
-    const leaked = answers.filter((a) => serialised.includes(`"${a}"`));
+    const leaked = authoredAnswers.filter((a) => serialised.includes(`"${a}"`));
 
     expect(leaked).toEqual([]);
-    expect(answers.length).toBe(70);
+    expect(authoredAnswers.length).toBe(70);
   });
 });
 
+/**
+ * The frozen validator refuses a skill with items and no fallback too, but it
+ * refuses it as `missing_skill_fallback` after assembly. Failing here names the
+ * skill.
+ */
 describe("every skill can answer for itself", () => {
   it("emits a node and a fallback for each skill an item names", () => {
     const { pack } = buildPack(declaration(), inputs());
@@ -326,16 +346,11 @@ describe("every skill can answer for itself", () => {
     expect(pack.skill_fallbacks.map((f) => f.skill_id)).toEqual([1]);
   });
 
-  it("refuses a skill that has items but no fallback copy", () => {
-    // The frozen validator refuses this too, but it refuses it as
-    // `missing_skill_fallback` after assembly. Failing here names the skill.
+  it("refuses a skill that has items but no fallback copy, naming the skill", () => {
     expect(() => buildPack(declaration(), inputs(new Map()))).toThrow(/skill 1/);
   });
 
   it("declares a node for every distinct skill, not just the first", () => {
-    // The second skill comes from a **template that says so**, not from a
-    // declaration that overrode one: the declaration no longer states a skill
-    // for a template source, so this is the only way two of them can appear.
     const otherSkill: Template = {
       id: "spike.other-skill",
       version: 1,

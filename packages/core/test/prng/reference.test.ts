@@ -61,7 +61,7 @@ const VIGNA: ReadonlyArray<{ seed: bigint; words: readonly bigint[] }> = [
     ],
   },
   {
-    seed: 9223372036854775808n, // 2^63 — the sign boundary
+    seed: 9223372036854775808n,
     words: [
       5196802822362493915n,
       14154714916085338130n,
@@ -74,7 +74,7 @@ const VIGNA: ReadonlyArray<{ seed: bigint; words: readonly bigint[] }> = [
     ],
   },
   {
-    seed: 18446744073709551615n, // 2^64 − 1
+    seed: 18446744073709551615n,
     words: [
       16490336266968443936n,
       16834447057089888969n,
@@ -109,9 +109,7 @@ describe("the vendored kernel agrees with Vigna's reference", () => {
     });
   }
 
-  it("compared a stream at every seed, and comparing nothing is a failure", () => {
-    // PROC-10. A loop over an empty table passes silently and this file is the
-    // only thing standing between the implementation and a plausible mistake.
+  it("compared a stream at every seed, because a loop over an empty table passes silently (PROC-10)", () => {
     const total = VIGNA.reduce((sum, v) => sum + v.words.length, 0);
     expect(VIGNA.length).toBe(5);
     expect(total).toBe(40);
@@ -119,10 +117,7 @@ describe("the vendored kernel agrees with Vigna's reference", () => {
     console.log(`  prng reference · ${total} words across ${VIGNA.length} seeds`);
   });
 
-  it("the vectors are not all the same stream", () => {
-    // Five seeds that produced identical output would mean the seed is being
-    // ignored — which every assertion above would happily accept if the table
-    // had been generated that way.
+  it("the vectors are not all the same stream, which a table generated from an ignored seed would be", () => {
     const firsts = new Set(VIGNA.map((v) => v.words[0]));
     expect(firsts.size).toBe(VIGNA.length);
   });

@@ -47,6 +47,14 @@ export interface MagicSquareCandidate {
  * *arithmetic* is true by construction and only the **uniqueness** is in doubt.
  * That is `parsePuzzle`'s to decide — the caged generator's design D1, and the
  * same reason there is no solver in this file.
+ *
+ * Distinctness is the format's rule, and a permutation of 1..size² satisfies it
+ * **by construction rather than by search**: there is no candidate to reject
+ * and no loop that could fail to terminate.
+ *
+ * The printed cells come back sorted, so the payload's shape does not turn on
+ * the order the draws happened to come out in — the pack is byte-diffed, and a
+ * stable order is what makes that diff readable.
  */
 export function magicSquareCandidate(
   seed: bigint,
@@ -62,20 +70,20 @@ export function magicSquareCandidate(
   const draw: Draw = drawsFrom(seed);
   const cells = size * size;
 
-  // A permutation of 1..size² in reading order: distinctness is the format's
-  // rule, and this satisfies it by construction rather than by search.
-  const values = shuffledIndices(cells, draw).map((at) => at + 1);
+  const permutationInReadingOrder = shuffledIndices(cells, draw).map(
+    (at) => at + 1,
+  );
   const solution: number[][] = <number[][]>[];
   for (let row = 0; row < size; row += 1) {
-    solution.push(values.slice(row * size, row * size + size));
+    solution.push(
+      permutationInReadingOrder.slice(row * size, row * size + size),
+    );
   }
 
   const wanted = Math.max(1, Math.round(cells * printedFraction(size)));
   const given = shuffledIndices(cells, draw)
     .slice(0, wanted)
     .map((at) => ({ row: Math.floor(at / size), col: at % size }))
-    // Sorted, so the payload's shape does not depend on draw order — the pack
-    // is byte-diffed and a stable order is what makes that readable.
     .sort((a, b) => a.row - b.row || a.col - b.col);
 
   return {

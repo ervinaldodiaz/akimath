@@ -47,6 +47,9 @@ interface Cell {
  * one run" rather than a partition. A cell whose runs are both length one is in
  * none, which the contract refuses as `cage_coverage_incomplete` — so this
  * refuses it first, by name, rather than proposing a board it knows is wrong.
+ * Such a cell can never be deduced, and the refusal is named
+ * `a_cell_belongs_to_no_run` so that a collapse in hit rate reads as *this* and
+ * not as a solver rejection.
  */
 export function kakuroCandidate(
   seed: bigint,
@@ -63,9 +66,6 @@ export function kakuroCandidate(
 
   const runs = maximalRuns(size, isBlocked);
   if (!everyCellIsInARun(size, isBlocked, runs)) {
-    // A cell with no run of its own can never be deduced, and the contract
-    // says so — `cage_coverage_incomplete`. Named here so a collapse in hit
-    // rate is legible as *this* and not as a solver rejection.
     return "a_cell_belongs_to_no_run";
   }
 
@@ -199,6 +199,11 @@ function everyCellIsInARun(
  * seeds do not produce the same board, and the recursion is bounded by the
  * board — at 6×6 that is at most 36 cells over 9 digits, which the contract's
  * own solver would find trivial and which is cheap enough to run per attempt.
+ *
+ * **A run longer than the digit ceiling is refused before the search, not
+ * during it.** Such a run cannot hold distinct digits however it is filled, and
+ * discovering that by backtracking costs `9!` dead ends — enough to time a test
+ * out. Nine cells is the most a run can carry.
  */
 export function fillBoard(
   size: number,
@@ -206,10 +211,6 @@ export function fillBoard(
   runs: readonly Cell[][],
   draw: Draw,
 ): number[][] | null {
-  // **Structural impossibility, before the search.** A run longer than the
-  // digit ceiling cannot hold distinct digits however it is filled, and
-  // discovering that by backtracking costs `9!` dead ends — enough to time a
-  // test out. Nine cells is the most a run can carry.
   if (runs.some((run) => run.length > HIGHEST_DIGIT)) {
     return null;
   }

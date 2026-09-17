@@ -21,9 +21,7 @@ describe("a version resolves to the behaviour that version had", () => {
     expect(resolve(registry, ref({ templateVersion: 2 })).version).toBe(2);
   });
 
-  it("refuses a version it does not have, rather than guessing a nearby one", () => {
-    // Falling back to the latest would silently rewrite history: an old attempt
-    // would rederive as something it never was.
+  it("refuses a version it does not have, because falling back to the latest would rederive an old attempt as something it never was", () => {
     expect(() => resolve(registry, ref({ templateVersion: 99 }))).toThrow(
       /no template arith\.integer\.subtract@99/,
     );
@@ -43,9 +41,7 @@ describe("retirement stops issuing and never stops rederiving", () => {
   const retiredV1: Template = { ...arithIntegerSubtractV1, retired: true };
   const registry = registryOf([retiredV1, arithIntegerSubtractV2]);
 
-  it("a retired version still rederives", () => {
-    // The half that matters: `attempts` is append-only, so an item issued
-    // before the retirement must still reconstruct.
+  it("a retired version still rederives, because `attempts` is append-only and an item issued before the retirement must reconstruct", () => {
     const item = rederive(registry, ref({ templateVersion: 1 }));
     expect(item.left.num).toBe(8);
     expect(item.right.num).toBe(15);
@@ -55,9 +51,7 @@ describe("retirement stops issuing and never stops rederiving", () => {
     expect(issuable(registry).map((t) => t.version)).toEqual([2]);
   });
 
-  it("nothing is retired by default", () => {
-    // The control: `issuable` filtering everything, or nothing, would satisfy
-    // one of the two assertions above on its own.
+  it("the control: nothing is retired by default, so an `issuable` that filtered everything would fail here", () => {
     const open = registryOf([arithIntegerSubtractV1, arithIntegerSubtractV2]);
     expect(issuable(open).map((t) => t.version)).toEqual([1, 2]);
   });

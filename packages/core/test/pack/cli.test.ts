@@ -66,6 +66,11 @@ describe("the builder writes a pack", () => {
   });
 });
 
+/**
+ * The damage a failed build must not do, named after the run that did it:
+ * `dump-schema.sh` truncated its output before the producer had run, so a bad
+ * run destroyed the committed artifact.
+ */
 describe("a refusal writes nothing and damages nothing", () => {
   it("exits non-zero and leaves no file where none existed", () => {
     const w = workspace(validDeclaration({ pack_salt: "not-a-salt" }));
@@ -77,8 +82,6 @@ describe("a refusal writes nothing and damages nothing", () => {
   });
 
   it("leaves a previously written pack exactly as it was", () => {
-    // The failure `dump-schema.sh` had: truncating the output before the
-    // producer has run, so a bad run destroys the committed artifact.
     const w = workspace(validDeclaration());
     run(["--declaration", w.declarationPath, "--out", w.out]);
     const before = readFileSync(w.out, "utf8");
@@ -109,20 +112,22 @@ describe("a refusal writes nothing and damages nothing", () => {
     expect(r.stderr).toMatch(/unknown_index_out_of_range/);
     expect(() => readFileSync(w.out, "utf8")).toThrow();
   });
-
-  // The copy is no longer a file this script is pointed at, so "the file has no
-  // fallback" is a scenario that cannot happen any more. The guarantee did not
-  // go away — it moved to `fallbackDiagnosis()`, which throws rather than
-  // handing back undefined, and `test/pack/misconceptions.test.ts` holds it
-  // there. Named here so the deletion reads as a move.
 });
 
+/**
+ * The assembly tests prove a pack *can* keep six families; this proves the one
+ * in the tree does.
+ *
+ * They run against their own declaration, so editing
+ * `content/pack.declaration.json` down to templates only would leave every one
+ * of them green while the shipped artifact offered a player one kind of
+ * question. That is the regression this whole change is shaped to prevent, so
+ * it is asserted against the artifact itself.
+ */
 describe("the committed pack is the one the declaration produces", () => {
   const committed = fileURLToPath(new URL("../../pack/starter.json", import.meta.url));
 
-  it("re-emitting leaves it byte-identical", () => {
-    // The same claim the CI step makes, made here so a developer finds out
-    // before pushing.
+  it("re-emitting leaves it byte-identical, before CI says so", () => {
     const before = readFileSync(committed, "utf8");
     const r = run([]);
 
@@ -131,12 +136,6 @@ describe("the committed pack is the one the declaration produces", () => {
   });
 
   it("keeps all six families, in the pack we actually ship", () => {
-    // **The assembly tests prove a pack *can* keep six families; this proves
-    // the one in the tree does.** They run against their own declaration, so
-    // editing `content/pack.declaration.json` down to templates only would
-    // leave every one of them green while the shipped artifact offered a
-    // player one kind of question. That is the regression this whole change is
-    // shaped to prevent, so it is asserted against the artifact itself.
     const pack = JSON.parse(readFileSync(committed, "utf8")) as {
       items: { stimulus: { kind: string } }[];
     };

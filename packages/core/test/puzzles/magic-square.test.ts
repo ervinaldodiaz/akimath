@@ -1,3 +1,13 @@
+/**
+ * The magic-square generator: the arithmetic it emits, the cells it prints and
+ * the sizes it refuses.
+ *
+ * Six is refused up front rather than attempted. The format permits it and the
+ * solver cannot verify it — 36 distinct values over 36 cells outrun
+ * `SEARCH_NODE_BUDGET` every time — so attempting it would spend the whole
+ * budget on boards the contract was always going to refuse.
+ */
+
 import { parsePuzzle } from "@akimath/contract";
 import { describe, expect, it } from "vitest";
 
@@ -32,15 +42,33 @@ const made = (seed: number, size = 3): Payload =>
 
 const SEEDS = Array.from({ length: 25 }, (_, i) => i + 1);
 
+/**
+ * Every number from one to `highest`.
+ *
+ * Distinctness is the format's rule, and a permutation of these satisfies it
+ * without anything having to search for it.
+ */
+const everyNumberUpTo = (highest: number): number[] =>
+  Array.from({ length: highest }, (_, i) => i + 1);
+
+/**
+ * How many cells a board comes with printed.
+ *
+ * The thresholds these are held to were **measured, not chosen**. Below 0.6 a
+ * 4×4 fails as `search_budget_exhausted` far more often than it fails as
+ * `solution_not_unique` — the boards are not worse, they are unverifiable. A
+ * 3×3 needs none of that and would be given away by the same fraction: at 0.6
+ * it prints five of nine cells, which is most of the answer.
+ */
+const printedCells = (size: number): number => made(1, size).board.given.length;
+
 describe("the arithmetic is true by construction", () => {
   it("every cell holds a different number from 1 to size squared", () => {
-    // Distinctness is the format's rule, and a permutation satisfies it without
-    // anything having to search for it.
     for (const size of [3, 4, 5]) {
       for (const seed of SEEDS) {
         const payload = made(seed, size);
         const flat = payload.board.solution.flat();
-        const wanted = Array.from({ length: size * size }, (_, i) => i + 1);
+        const wanted = everyNumberUpTo(size * size);
 
         expect([...flat].sort((a, b) => a - b), `${size} seed ${seed}`).toEqual(wanted);
       }
@@ -92,8 +120,7 @@ describe("what it prints", () => {
     }
   }, 60_000);
 
-  it("it never prints the whole board", () => {
-    // A square with every cell printed is a picture, not a puzzle.
+  it("it never prints the whole board, which would be a picture", () => {
     for (const size of [3, 4, 5]) {
       const payload = made(1, size);
       expect(payload.board.given.length).toBeLessThan(size * size);
@@ -102,14 +129,9 @@ describe("what it prints", () => {
   });
 
   it("a small square prints little, a larger one prints more", () => {
-    // **Measured, not chosen.** Below 0.6 a 4×4 fails as
-    // `search_budget_exhausted` far more often than it fails as
-    // `solution_not_unique` — the boards are not worse, they are unverifiable.
-    // A 3×3 needs none of that and would be given away by the same fraction:
-    // at 0.6 it prints five of nine cells, which is most of the answer.
-    expect(made(1, 3).board.given.length).toBeLessThanOrEqual(3);
-    expect(made(1, 4).board.given.length).toBeGreaterThan(16 / 3);
-    expect(made(1, 5).board.given.length).toBeGreaterThan(25 / 3);
+    expect(printedCells(3)).toBeLessThanOrEqual(3);
+    expect(printedCells(4)).toBeGreaterThan(16 / 3);
+    expect(printedCells(5)).toBeGreaterThan(25 / 3);
   });
 
   it("the printed cells come in a stable order", () => {
@@ -124,10 +146,6 @@ describe("what it prints", () => {
 
 describe("a size the validator cannot decide is refused up front", () => {
   it("six is named, not attempted", () => {
-    // The format permits 6 and the solver cannot verify it: 36 distinct values
-    // over 36 cells outruns `SEARCH_NODE_BUDGET` every time. Attempting it
-    // would spend the whole budget on boards the contract was always going to
-    // refuse.
     expect(magicSquareCandidate(1n, 6)).toBe('size_not_verifiable');
   });
 

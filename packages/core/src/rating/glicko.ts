@@ -94,11 +94,16 @@ function expected(rating: number, outcome: Outcome): number {
  * The mechanism is worth stating precisely so it is not misapplied: this works
  * because the *stored* type is narrower than the *computed* one. It is not a
  * general licence to call floating point deterministic.
+ *
+ * **An empty period returns the prior untouched.** No outcomes is not a loss:
+ * Glickman's RD growth comes from time passing, which is `decay`'s job, not
+ * from a period nobody played.
+ *
+ * `dSquared` is Glickman's `d²`, the variance of the period's evidence, and
+ * `weight` combines it with the prior's own.
  */
 export function rateSession(prior: Skill, outcomes: readonly Outcome[]): Skill {
   if (outcomes.length === 0) {
-    // No outcomes is not a loss. Glickman's RD growth comes from time passing,
-    // which is `decay`'s job, not from an empty period.
     return prior;
   }
 
@@ -112,7 +117,6 @@ export function rateSession(prior: Skill, outcomes: readonly Outcome[]): Skill {
     scoreSum += gj * (outcome.score - ej);
   }
 
-  // d², the variance of the period's evidence.
   const dSquared = 1 / (Q * Q * informationSum);
   const weight = 1 / (1 / (prior.deviation * prior.deviation) + 1 / dSquared);
 

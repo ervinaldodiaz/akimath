@@ -27,6 +27,20 @@ export interface PredictedDistractor {
 const whole = (term: { num: number; den: number }): number | null =>
   term.den === 1 ? term.num : null;
 
+/**
+ * The mistakes a subtraction item can anticipate, each with its answer spelled.
+ *
+ * `subtracted_in_reverse` is `3 − 8` answered as `8 − 3`, the commonest
+ * subtraction mistake there is: subtraction is not commutative and addition
+ * is, and the habit carries.
+ *
+ * **A candidate whose answer is already taken is dropped.** One equal to the
+ * right answer would diagnose a correct learner, and two distractors sharing
+ * an answer make one of them unreachable. Both are refusals in the frozen
+ * validator; dropping them here means a build does not fail over arithmetic
+ * that happens to coincide — `4 − 4` makes "reversed" and the right answer the
+ * same number.
+ */
 export function predictDistractors(
   item: GeneratedItem,
   correct: string,
@@ -41,31 +55,23 @@ export function predictDistractors(
   }
 
   const candidates: readonly PredictedDistractor[] = [
-    // `3 − 8` answered as `8 − 3`. The commonest subtraction mistake there is:
-    // subtraction is not commutative and addition is, and the habit carries.
     {
       answer: renderCanonicalAnswer(BigInt(right - left)),
       misconception: "subtracted_in_reverse",
     },
-    // The sign read as a plus.
     {
       answer: renderCanonicalAnswer(BigInt(left + right)),
       misconception: "added_instead_of_subtracting",
     },
   ];
 
-  const seen = new Set<string>([correct]);
+  const answersTaken = new Set<string>([correct]);
   const kept: PredictedDistractor[] = [];
   for (const candidate of candidates) {
-    // A distractor equal to the right answer would diagnose a correct learner,
-    // and two distractors sharing an answer make one of them unreachable. Both
-    // are refusals in the frozen validator; dropping them here means a build
-    // does not fail over arithmetic that happens to coincide — `4 − 4` makes
-    // "reversed" and the right answer the same number.
-    if (seen.has(candidate.answer)) {
+    if (answersTaken.has(candidate.answer)) {
       continue;
     }
-    seen.add(candidate.answer);
+    answersTaken.add(candidate.answer);
     kept.push(candidate);
   }
   return kept;
