@@ -46,6 +46,22 @@ export interface WordSearchCandidate {
  * all longer than the grid, or an empty one. That is not a puzzle to reject, it
  * is a request that cannot be met.
  *
+ * **Words are tried in a shuffled order, and deliberately not longest-first.**
+ * That is the obvious heuristic — a long word has the fewest places to go — and
+ * it was written, then measured: over sixty seeds it placed 5.00 words against
+ * 4.77 at 5×5, *6.13 against 6.20* at 6×6, and made no difference at all at
+ * 8×8, where every word fits either way. A heuristic that cannot be told from
+ * chance is a claim in a comment rather than a property of the code, so it is
+ * gone.
+ *
+ * A word too long for the grid is dropped before the search rather than left to
+ * fail placement: it saves the search, and it is the only case where "no" is
+ * knowable without looking at the grid.
+ *
+ * The words come back in the order the caller gave, not the order they were
+ * placed: the list a player reads is content, and "longest first" is this
+ * function's business rather than theirs.
+ *
  * The vocabulary is the caller's. Which words a player meets is content, and
  * the generator has no business holding a Spanish word list.
  */
@@ -59,23 +75,12 @@ export function wordSearchCandidate(
     Array.from({ length: size }, () => null),
   );
 
-  // **Shuffled, and deliberately not sorted longest-first.** That is the
-  // obvious heuristic — a long word has the fewest places to go — and it was
-  // written, then measured: over sixty seeds it placed 5.00 words against 4.77
-  // at 5×5, *6.13 against 6.20* at 6×6, and made no difference at all at 8×8,
-  // where every word fits either way. A heuristic that cannot be told from
-  // chance is a claim in a comment rather than a property of the code, so it
-  // is gone.
-  //
-  // Words too long for the grid are dropped here rather than left to fail
-  // placement: it saves the search, and it is the only case where "no" is
-  // knowable without looking at the grid.
-  const candidates = shuffledIndices(vocabulary.length, draw)
+  const shuffledWordsThatFit = shuffledIndices(vocabulary.length, draw)
     .map((at) => vocabulary[at]!)
     .filter((word) => word.length <= size);
 
   const placed: string[] = [];
-  for (const word of candidates) {
+  for (const word of shuffledWordsThatFit) {
     if (placed.length === MAX_WORDS) {
       break;
     }
@@ -93,9 +98,6 @@ export function wordSearchCandidate(
       grid: grid.map((row) =>
         row.map((cell) => cell ?? FILLER[draw(FILLER.length - 1)]!),
       ),
-      // The order the caller gave, not the order they were placed: the list a
-      // player reads is content, and "longest first" is this function's
-      // business rather than theirs.
       words: vocabulary.filter((word) => placed.includes(word)),
     },
   };

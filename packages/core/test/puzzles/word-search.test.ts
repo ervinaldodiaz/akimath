@@ -17,6 +17,12 @@ const DIRECTIONS: readonly (readonly [number, number])[] = [
   [-1, -1],
 ];
 
+/**
+ * How many times a word reads out of the grid, over all eight directions.
+ *
+ * Twice is a rejection in the contract, not a warning: two placements make two
+ * different traces correct and the puzzle stops having an answer.
+ */
 function occurrences(grid: readonly (readonly string[])[], word: string): number {
   let found = 0;
   for (const [row, letters] of grid.entries()) {
@@ -39,10 +45,49 @@ const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
 const made = (seed: number, size = 8, words = WORDS): WordSearchCandidate | null =>
   wordSearchCandidate(BigInt(seed), size, words);
 
+/**
+ * What an unplaced cell would hold. A placeholder passes the single-letter
+ * regex only by accident, and the whole point of the filler is that a player
+ * cannot see where the words are.
+ */
+const UNFILLED_CELL = ".";
+
+/**
+ * Six letters in a 6×6: as long as the grid is wide, and so a straight line
+ * across it. The bound is `<= size`, not `< size`, because dropping such a
+ * word would silently shrink the vocabulary.
+ */
+const EXACTLY_AS_LONG_AS_THE_GRID = ["MEDIDA", "SUMA"];
+
+/**
+ * Six letters against a 3×3: no line of that grid holds it in any of the eight
+ * directions. A six-letter word in a 5×5 can still lie along a diagonal, which
+ * is why the refusal is shown against the smaller board.
+ */
+const LONGER_THAN_ANY_LINE = ["UNIDAD"];
+
+/**
+ * Two words against a 3×3, both longer than any line of it, so no seed can
+ * help. What the report then says is that the proposer declined, not that the
+ * contract refused — different problems with different fixes.
+ */
+const NOTHING_FITS = ["UNIDAD", "DECENA"];
+
+/**
+ * How many of the eight words each seed's grid actually hides.
+ *
+ * Measured over two hundred seeds: 198 place all eight and 2 place seven. The
+ * floor and the proportion are both asserted, because the failure this catches
+ * is a *collapse* — a generator that only ever started in one corner, or that
+ * computed its start cells wrongly, places two or three, and every "each word
+ * appears once" assertion still passes, since those only check the words it
+ * *claims*.
+ */
+const wordsPlacedPerSeed = (): readonly number[] =>
+  SEEDS.map((s) => made(s)?.payload.words.length ?? 0);
+
 describe("a generated grid hides the words it lists", () => {
   it("every listed word is in the grid exactly once", () => {
-    // Twice is a rejection in the contract, not a warning: two placements make
-    // two different traces correct and the puzzle stops having an answer.
     let checked = 0;
     for (const seed of SEEDS) {
       const candidate = made(seed);
@@ -77,22 +122,14 @@ describe("a generated grid hides the words it lists", () => {
   });
 
   it("no cell is left unfilled", () => {
-    // A placeholder would pass the regex above only by accident, and the whole
-    // point of the filler is that a player cannot see where the words are.
     const candidate = made(1)!;
-    expect(candidate.payload.grid.flat().join("")).not.toContain(".");
+    expect(candidate.payload.grid.flat().join("")).not.toContain(UNFILLED_CELL);
   });
 });
 
 describe("it uses the whole grid", () => {
   it("an 8×8 hides almost all of eight words, almost always", () => {
-    // Measured over two hundred seeds: 198 place all eight and 2 place seven.
-    // The floor and the proportion are both asserted, because the failure this
-    // catches is a *collapse* — a generator that only ever started in one
-    // corner, or that computed its start cells wrongly, places two or three,
-    // and every "each word appears once" assertion still passes, since those
-    // only check the words it *claims*.
-    const counts = SEEDS.map((s) => made(s)?.payload.words.length ?? 0);
+    const counts = wordsPlacedPerSeed();
 
     expect(Math.min(...counts)).toBeGreaterThanOrEqual(7);
     expect(counts.filter((n) => n === 8).length).toBeGreaterThan(SEEDS.length - 5);
@@ -123,9 +160,7 @@ describe("it uses the whole grid", () => {
   });
 
   it("a word exactly as long as the grid is wide still fits", () => {
-    // `<= size`, not `< size`: an eight-letter word in an 8×8 is a straight
-    // line across it, and dropping it would silently shrink the vocabulary.
-    const candidate = wordSearchCandidate(3n, 6, ["MEDIDA", "SUMA"])!;
+    const candidate = wordSearchCandidate(3n, 6, EXACTLY_AS_LONG_AS_THE_GRID)!;
 
     expect(candidate.payload.words).toContain("MEDIDA");
   });
@@ -156,14 +191,10 @@ describe("the contract decides", () => {
   });
 
   it("a word longer than the grid is refused rather than truncated", () => {
-    // `NUMERO` is six letters and cannot lie in a 5×5 in eight directions? It
-    // can — so this uses a word that cannot fit at all.
-    expect(wordSearchCandidate(1n, 3, ["UNIDAD"])).toBeNull();
+    expect(wordSearchCandidate(1n, 3, LONGER_THAN_ANY_LINE)).toBeNull();
   });
 
-  it("a word list the contract would refuse is not offered", () => {
-    // More than eight words is `payload_shape`. The generator takes the first
-    // eight rather than proposing a payload it knows is off-schema.
+  it("more than eight words is trimmed, not proposed off-schema", () => {
     const candidate = wordSearchCandidate(1n, 8, [...WORDS, "PARES", "IMPAR"]);
     expect(candidate?.payload.words.length).toBeLessThanOrEqual(8);
   });
@@ -183,9 +214,7 @@ describe("it is a function of its seed", () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
-  it("words run in more than one direction", () => {
-    // A generator that only ever placed left-to-right would satisfy everything
-    // above and make every grid a word list with padding.
+  it("words run in more than one direction, or the grid is a word list", () => {
     const steps = new Set<string>();
     for (const seed of SEEDS) {
       const candidate = made(seed);
@@ -231,11 +260,8 @@ describe("a batch of them", () => {
   });
 
   it("a vocabulary nothing fits exhausts the budget, named", () => {
-    // Every word is longer than the grid, so no seed can help. The report says
-    // the proposer declined rather than that the contract refused — different
-    // problems with different fixes.
     const batch = generateWordSearchBatch(
-      { size: 3, count: 1, firstSeed: 1n, vocabulary: ["UNIDAD", "DECENA"] },
+      { size: 3, count: 1, firstSeed: 1n, vocabulary: NOTHING_FITS },
       COPY,
     );
 

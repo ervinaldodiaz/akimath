@@ -49,6 +49,16 @@ const RATING_ONLY_PROPERTIES = [
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
+/**
+ * A synthetic source that violates the gate twice over, so the walker can be
+ * shown to bite.
+ *
+ * Every assertion about the real tree passes for a walker that finds nothing
+ * because it is broken. Scanning this is the cheapest way to tell the two
+ * apart without adding a violation to shipped source.
+ */
+const PROBE_SOURCE = "export const n = () => Math.random() + Date.now();";
+
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
     const full = path.join(directory, entry);
@@ -57,7 +67,17 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-/** True for the `y` in `x.y` — a property name, not a reference to a global. */
+/**
+ * True for the `y` in `x.y` — a property name, not a reference to a global.
+ *
+ * The rule is deliberately "unless it is the property NAME", so `obj.Date` is
+ * ignored and `Date.anything` is not. The first attempt asked
+ * `!isPropertyAccessExpression(parent)` instead, which skipped the most likely
+ * violation in the language: in `Date.now()`, `Date` is the *expression* of the
+ * property access, so that guard excluded it — and `Date.now` is not in the
+ * banned-property list either. The control test at the bottom of this file is
+ * what found it.
+ */
 function isPropertyName(node: ts.Identifier): boolean {
   const parent = node.parent;
   return (
@@ -88,12 +108,6 @@ function scan(file: string): { sightings: Sighting[]; nodes: number } {
   const visit = (node: ts.Node): void => {
     nodes += 1;
 
-    // Not `!isPropertyAccessExpression(parent)`, which was the first attempt and
-    // skipped the most likely violation in the language: in `Date.now()`, `Date`
-    // is the *expression* of the property access, so that guard excluded it and
-    // `Date.now` is not in the banned-property list either. The rule is "unless
-    // it is the property NAME", so `obj.Date` is ignored and `Date.anything` is
-    // not. The control test at the bottom is what found this.
     if (ts.isIdentifier(node) && !isPropertyName(node)) {
       const name = node.text;
       if ((BANNED_IDENTIFIERS as readonly string[]).includes(name)) {
@@ -133,9 +147,7 @@ describe("the core performs no ambient IO", () => {
   const files = sourceFiles(SRC);
   const scans = files.map((file) => scan(file));
 
-  it("walked a real tree", () => {
-    // PROC-10. A mistyped root walks nothing and reports nothing, which looks
-    // exactly like a clean codebase.
+  it("walked a real tree, because a mistyped root reports nothing and looks exactly like a clean codebase (PROC-10)", () => {
     expect(files.length).toBeGreaterThan(0);
     const nodes = scans.reduce((sum, s) => sum + s.nodes, 0);
     expect(nodes).toBeGreaterThan(0);
@@ -154,12 +166,9 @@ describe("the core performs no ambient IO", () => {
   });
 
   it("sees a violation that is there", () => {
-    // The control. Every assertion above passes for a walker that finds
-    // nothing because it is broken, and this is the cheapest way to tell the
-    // two apart without adding a violation to shipped source.
     const probe = ts.createSourceFile(
       "probe.ts",
-      "export const n = () => Math.random() + Date.now();",
+      PROBE_SOURCE,
       ts.ScriptTarget.ES2023,
       true,
     );

@@ -75,10 +75,14 @@ function termOf(token: unknown, id: string): Term {
   throw new TypeError(`item "${id}": a term must be text or a fraction`);
 }
 
+/**
+ * An authored expression, as the frozen arithmetic payload spells it.
+ *
+ * **`term operator term =` and nothing else.** A longer expression is a shape
+ * the frozen payload cannot hold, and silently dropping the tail would ship a
+ * different question than the one that was authored.
+ */
 function arithmeticFrom(prompt: readonly unknown[], id: string): unknown {
-  // `term operator term =` and nothing else. A longer expression is a shape the
-  // frozen payload cannot hold, and silently dropping the tail would ship a
-  // different question than the one that was authored.
   if (prompt.length !== 4) {
     throw new TypeError(
       `item "${id}": an expression must be term, operator, term, equals — got ${prompt.length} tokens`,
@@ -95,6 +99,32 @@ function arithmeticFrom(prompt: readonly unknown[], id: string): unknown {
   };
 }
 
+/**
+ * One authored item, in the frozen envelope.
+ *
+ * **Shape and spelling come from the one decision, `storedAnswerOf`.** This
+ * read the raw field for a `/` instead — a second implementation of
+ * `storedAnswer`, agreeing by coincidence, which is the state #50 shipped
+ * from. The decision lives in `packages/contract` so the pack builder and the
+ * server make one choice about both halves, and the shape is *derived from*
+ * the spelling rather than computed beside it, which is what stops them coming
+ * apart again. `storedAnswerOf` states there why `4/1` stays a fraction, and
+ * that no authored answer is spelled that way today. Held by
+ * `test/one-way-to-spell-an-answer.test.ts`.
+ *
+ * **Content is validated where it is read**, and `storedAnswerOf` validates,
+ * so the refusal is unchanged by the move. A digest over a non-canonical
+ * answer grades a right answer wrong, on a device, with nothing reporting an
+ * error — which is exactly what the app's own reader refuses too.
+ *
+ * `keypad` is `item`, the only layout an item ever uses; `puzzle` and `otp`
+ * belong to other surfaces. Not a declaration choice, so not in the
+ * declaration.
+ *
+ * `diagnosis` is authored content, filled in by the diagnosis pass. Nullable
+ * in the frozen format precisely so the copy is not a prerequisite for a valid
+ * pack.
+ */
 export function liftAuthored(authored: unknown, options: LiftOptions): Item {
   const raw = authored as {
     id?: string;
@@ -114,30 +144,20 @@ export function liftAuthored(authored: unknown, options: LiftOptions): Item {
       : arithmeticFrom(raw.prompt ?? [], id);
 
   const answer = raw.answer ?? "";
-  // Shape and spelling from the one decision. This read the raw field for a
-  // `/` — a second implementation of `storedAnswer`, agreeing by coincidence,
-  // which is the state #50 shipped from. It validates, so the refusal is the same.
   const stored = storedAnswerOf(answer);
   if (!stored.ok) {
-    // Content is validated where it is read. A digest over a non-canonical
-    // answer grades a right answer wrong, on a device, with nothing reporting
-    // an error — which is exactly what the app's own reader refuses too.
     throw new TypeError(`item "${id}": answer "${answer}" is not storage-canonical (${stored.tag})`);
   }
 
   return {
     skill_id: options.skillId,
     ladder_step: raw.ladder_step as number,
-    // The only layout an item ever uses; `puzzle` and `otp` belong to other
-    // surfaces. Not a declaration choice, so not in the declaration.
     keypad: "item",
     stimulus: stimulus as Item["stimulus"],
     answer: {
       shape: stored.value.shape,
       digest: answerDigest(options.packSalt, stored.value.canonical),
     },
-    // Authored content, filled in by the diagnosis pass. Nullable in the frozen
-    // format precisely so the copy is not a prerequisite for a valid pack.
     diagnosis: null,
   };
 }

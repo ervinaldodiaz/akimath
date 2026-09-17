@@ -20,6 +20,16 @@ import { describe, expect, it } from "vitest";
  * `index.ts` — and this is the test that keeps that true.
  */
 
+/**
+ * The source file a relative specifier names.
+ *
+ * NodeNext spells the *emitted* name, so `./rational.js` is `./rational.ts` on
+ * disk and this walker reads the source rather than a build.
+ */
+function sourceFileFor(fromFile: string, specifier: string): string {
+  return path.resolve(path.dirname(fromFile), specifier.replace(/\.js$/u, ".ts"));
+}
+
 /** One import that leaves the package. */
 interface Escape {
   readonly file: string;
@@ -78,13 +88,7 @@ export function walkImports(
         });
         return;
       }
-      // `./rational.js` on disk is `./rational.ts` — NodeNext spells the
-      // emitted name, and this walks the source.
-      const resolved = path.resolve(
-        path.dirname(file),
-        specifier.replace(/\.js$/u, ".ts"),
-      );
-      queue.push(resolved);
+      queue.push(sourceFileFor(file, specifier));
     };
 
     ts.forEachChild(source, function visit(node: ts.Node): void {
@@ -102,6 +106,12 @@ export function walkImports(
   return { visited, escapes };
 }
 
+/**
+ * The public surface, and the only root this walk starts from.
+ *
+ * **PROC-10 is why the walk's own size is asserted.** A mistyped entry point
+ * walks one file and finds nothing, which looks exactly like a clean surface.
+ */
 const ENTRY = fileURLToPath(new URL("../src/index.ts", import.meta.url));
 
 describe("the public surface imports no package", () => {
@@ -113,9 +123,7 @@ describe("the public surface imports no package", () => {
     }
   });
 
-  it("walked a real tree", () => {
-    // PROC-10. A mistyped entry point walks one file and finds nothing, which
-    // looks exactly like a clean surface.
+  it("walked a real tree, so a clean surface is not a mistyped entry point", () => {
     expect(walk.visited.length).toBeGreaterThan(1);
     // eslint-disable-next-line no-console
     console.log(
@@ -131,14 +139,24 @@ describe("the public surface imports no package", () => {
   });
 });
 
+/**
+ * A two-module tree whose leaf imports a package, held in memory.
+ *
+ * **The control.** Every assertion above passes for a walker that is simply
+ * broken, and this tells the two apart — off disk, so proving the walker works
+ * costs no committed violation.
+ */
+const SOURCES_WITH_ONE_ESCAPE: Record<string, string> = {
+  "/x/index.ts": 'export { a } from "./a.js";\n',
+  "/x/a.ts":
+    'import { answerDigest } from "@akimath/contract";\nexport const a = answerDigest;\n',
+};
+
 describe("the walker sees a violation that is there", () => {
-  // The control. Every assertion above passes for a walker that is simply
-  // broken, and this tells the two apart without committing a violation.
-  const sources: Record<string, string> = {
-    "/x/index.ts": 'export { a } from "./a.js";\n',
-    "/x/a.ts": 'import { answerDigest } from "@akimath/contract";\nexport const a = answerDigest;\n',
-  };
-  const walk = walkImports("/x/index.ts", (f) => sources[f] ?? null);
+  const walk = walkImports(
+    "/x/index.ts",
+    (f) => SOURCES_WITH_ONE_ESCAPE[f] ?? null,
+  );
 
   it("follows a relative re-export into the module it names", () => {
     expect(walk.visited).toEqual(["/x/index.ts", "/x/a.ts"]);

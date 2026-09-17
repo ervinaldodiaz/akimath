@@ -32,6 +32,9 @@ const C_SQUARED_PER_DAY =
 /**
  * The prior, aged by `elapsedDays`. The rating never moves — only certainty
  * about it does.
+ *
+ * **Growth is capped at the unrated deviation**: past that, the system knows
+ * nothing about the player and there is nothing further to forget.
  */
 export function decay(prior: Skill, elapsedDays: number): Skill {
   if (!Number.isFinite(elapsedDays) || elapsedDays < 0) {
@@ -47,8 +50,6 @@ export function decay(prior: Skill, elapsedDays: number): Skill {
 
   return Object.freeze({
     rating: Math.fround(prior.rating),
-    // Capped at the unrated deviation: past that, the system knows nothing
-    // about the player and there is nothing further to forget.
     deviation: Math.fround(Math.min(grown, INITIAL_DEVIATION)),
   });
 }

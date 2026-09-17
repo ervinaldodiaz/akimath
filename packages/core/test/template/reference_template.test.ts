@@ -24,14 +24,20 @@ const STARTER = JSON.parse(
 
 /** The committed seed. Found by search, then written down. */
 const SEED = 389n;
+
+/**
+ * The one shipped item this file reproduces, named rather than looked up.
+ *
+ * **PROC-10 in miniature.** If the pack were renamed or this item removed,
+ * `shipped` would be `undefined` and every assertion below would compare
+ * against it, so the suite asserts the item is there before using it.
+ */
 const ITEM_ID = "sub-2";
 
 describe(`the reference template reproduces the shipped ${ITEM_ID}`, () => {
   const shipped = STARTER.items.find((item) => item.id === ITEM_ID);
 
   it("the item it claims to reproduce is in the shipped pack", () => {
-    // PROC-10 in miniature: if the pack were renamed or the item removed, every
-    // assertion below would be comparing against `undefined`.
     expect(shipped, `${ITEM_ID} is not in the starter pack`).toBeDefined();
     expect(STARTER.items.length).toBeGreaterThan(0);
   });
@@ -47,7 +53,7 @@ describe(`the reference template reproduces the shipped ${ITEM_ID}`, () => {
     expect(item.prompt).toEqual(shipped!.prompt);
   });
 
-  it("reproduces its answer, as an exact value rather than a string", () => {
+  it("reproduces its answer as an exact value, because core does not render — the contract owns the spelling", () => {
     const item = rederive(registryOf([arithIntegerSubtractV1]), {
       templateId: "arith.integer.subtract",
       templateVersion: 1,
@@ -55,15 +61,11 @@ describe(`the reference template reproduces the shipped ${ITEM_ID}`, () => {
       ladderStep: shipped!.ladder_step,
     });
 
-    // `-7` in the pack. Compared through the number, because core does not
-    // render — that rule is `rational.ts`'s and the contract owns the spelling.
     expect(item.answer.numerator).toBe(BigInt(shipped!.answer));
     expect(item.answer.denominator).toBe(1n);
   });
 
-  it("a different seed does not reproduce it", () => {
-    // The control. Every assertion above is satisfied by a generator that
-    // ignores its seed and returns `8 − 15` always.
+  it("the control: a different seed does not reproduce it, so a generator that ignored its seed and always returned `8 − 15` would fail", () => {
     const other = rederive(registryOf([arithIntegerSubtractV1]), {
       templateId: "arith.integer.subtract",
       templateVersion: 1,

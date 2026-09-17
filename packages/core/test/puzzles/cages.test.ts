@@ -4,6 +4,13 @@ import { cagePartition, MAX_CAGE_CELLS, type CageCells } from "../../src/puzzles
 
 const key = (cell: { row: number; col: number }): string => `${cell.row},${cell.col}`;
 
+/**
+ * Whether a cage is one shape: every cell reachable from the first by
+ * orthogonal steps.
+ *
+ * A cage drawn in two pieces cannot be outlined, and would read as two cages
+ * sharing a number.
+ */
 function isConnected(cage: CageCells): boolean {
   const remaining = new Set(cage.map(key));
   const queue = [cage[0]!];
@@ -23,6 +30,62 @@ function isConnected(cage: CageCells): boolean {
     }
   }
   return remaining.size === 0;
+}
+
+/**
+ * The rows and the columns that some multi-cell cage reaches, over twenty
+ * seeds.
+ *
+ * A growth rule that refused one direction — `row <= 0` instead of `row < 0`,
+ * say — still partitions the board and still keeps every cage connected. What
+ * it does is turn the first row into singletons, which is a row of printed
+ * answers, and nothing else here would notice.
+ */
+function linesGrownCagesReach(size: number): {
+  readonly rows: ReadonlySet<number>;
+  readonly columns: ReadonlySet<number>;
+} {
+  const rows = new Set<number>();
+  const columns = new Set<number>();
+
+  for (let seed = 0; seed < 20; seed += 1) {
+    for (const cage of cagePartition(BigInt(seed), size)) {
+      if (cage.length === 1) {
+        continue;
+      }
+      for (const cell of cage) {
+        rows.add(cell.row);
+        columns.add(cell.col);
+      }
+    }
+  }
+
+  return { rows, columns };
+}
+
+/**
+ * Every step from one cell of a cage to an orthogonal neighbour in the same
+ * cage — which is what a direction is here, growth leaving no other trace.
+ *
+ * Two directions that were secretly the same direction would leave every other
+ * assertion true and make every cage a bar.
+ */
+function stepsWithinCages(size: number): ReadonlySet<string> {
+  const steps = new Set<string>();
+
+  for (let seed = 0; seed < 20; seed += 1) {
+    for (const cage of cagePartition(BigInt(seed), size)) {
+      for (const a of cage) {
+        for (const b of cage) {
+          if (Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1) {
+            steps.add(`${b.row - a.row},${b.col - a.col}`);
+          }
+        }
+      }
+    }
+  }
+
+  return steps;
 }
 
 describe("a partition covers the board exactly once", () => {
@@ -49,8 +112,6 @@ describe("a partition covers the board exactly once", () => {
 
 describe("a cage is one shape a player can see", () => {
   it("every cage is orthogonally connected", () => {
-    // A cage drawn in two pieces cannot be outlined, and would read as two
-    // cages sharing a number.
     for (let size = 3; size <= 6; size += 1) {
       for (let seed = 0; seed < 8; seed += 1) {
         for (const cage of cagePartition(BigInt(seed), size)) {
@@ -67,9 +128,7 @@ describe("a cage is one shape a player can see", () => {
     }
   });
 
-  it("the board is not one cage per cell", () => {
-    // A partition of singletons satisfies every rule above and is a board with
-    // every answer printed on it.
+  it("the board is not one cage per cell, which would print every answer", () => {
     const cages = cagePartition(5n, 5);
     expect(cages.some((cage) => cage.length > 1)).toBe(true);
   });
@@ -77,49 +136,14 @@ describe("a cage is one shape a player can see", () => {
 
 describe("growth reaches the whole board", () => {
   it("a multi-cell cage touches every row and every column", () => {
-    // A growth rule that refused one direction — `row <= 0` instead of
-    // `row < 0`, say — still partitions the board and still keeps every cage
-    // connected. What it does is turn the first row into singletons, which is
-    // a row of printed answers, and nothing above would notice.
-    const size = 5;
-    const rows = new Set<number>();
-    const columns = new Set<number>();
-
-    for (let seed = 0; seed < 20; seed += 1) {
-      for (const cage of cagePartition(BigInt(seed), size)) {
-        if (cage.length === 1) {
-          continue;
-        }
-        for (const cell of cage) {
-          rows.add(cell.row);
-          columns.add(cell.col);
-        }
-      }
-    }
+    const { rows, columns } = linesGrownCagesReach(5);
 
     expect([...rows].sort()).toEqual([0, 1, 2, 3, 4]);
     expect([...columns].sort()).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("cages grow in all four directions", () => {
-    // Two directions that are the same direction would leave every assertion
-    // above true and make every cage a bar. Measured as the step between two
-    // cells of one cage, which is what a direction is here.
-    const steps = new Set<string>();
-
-    for (let seed = 0; seed < 20; seed += 1) {
-      for (const cage of cagePartition(BigInt(seed), 5)) {
-        for (const a of cage) {
-          for (const b of cage) {
-            if (Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1) {
-              steps.add(`${b.row - a.row},${b.col - a.col}`);
-            }
-          }
-        }
-      }
-    }
-
-    expect([...steps].sort()).toEqual(["-1,0", "0,-1", "0,1", "1,0"]);
+    expect([...stepsWithinCages(5)].sort()).toEqual(["-1,0", "0,-1", "0,1", "1,0"]);
   });
 });
 

@@ -34,24 +34,26 @@ const manifest = JSON.parse(
  * DEP-1 puts dev dependencies out of the shipping allowlist's scope — they do
  * not reach a device — but `@akimath/contract` is unusual enough to say out
  * loud, because a reader will ask why the zero-dependency package references
- * another package at all.
+ * another package at all. Its audit, which DEP-1 requires to live beside the
+ * entry rather than in a pull-request body:
+ *
+ * **`@akimath/contract` is build-time, not shipped.** Core is a producer of
+ * items; the contract is the frozen acceptor. Two things need it and neither
+ * reaches a device — the tests, which prove a generated item is loadable, and
+ * the pack builder (`src/pack/`, `src/adapters/build-pack.ts`), which needs
+ * `answerDigest` and `parsePack` to emit a pack at all. Putting it in
+ * `dependencies` would defeat the gate above, because a manifest reader cannot
+ * tell a workspace sibling from `drizzle-orm`, and would drag `zod` in
+ * transitively, since the contract's index re-exports every schema module.
+ *
+ * **A devDependency is on disk exactly like a runtime one**, so "core ships
+ * nothing" stopped being provable from the manifest alone the moment source
+ * could import this. `test/import_boundary.test.ts` is what makes it provable
+ * again: it walks the imports reachable from `src/index.ts` and fails if any of
+ * them leaves the package. The builder is not reachable from there, and that
+ * test is what keeps it so.
  */
 const DEV_DEPENDENCY_REASONS: Readonly<Record<string, string>> = {
-  // **Build-time, not shipped.** Core is a producer of items; the contract is
-  // the frozen acceptor. Two things need it and neither reaches a device: the
-  // tests, which prove a generated item is loadable, and the pack builder
-  // (`src/pack/`, `src/adapters/build-pack.ts`), which needs `answerDigest` and
-  // `parsePack` to emit a pack at all. Putting it in `dependencies` would
-  // defeat the gate above — a manifest reader cannot tell a workspace sibling
-  // from `drizzle-orm` — and would drag `zod` in transitively, because the
-  // contract's index re-exports every schema module.
-  //
-  // **A devDependency is on disk exactly like a runtime one**, so "core ships
-  // nothing" stopped being provable from the manifest alone the moment source
-  // could import this. `import_boundary.test.ts` is what makes it provable
-  // again: it walks the imports reachable from `src/index.ts` and fails if any
-  // of them leaves the package. The builder is not reachable from there, and
-  // that test is what keeps it so.
   "@akimath/contract": "the frozen format — tests prove core's output is acceptable, and the pack builder emits it",
   "@stryker-mutator/core": "mutation testing (Tier 1b)",
   "@stryker-mutator/vitest-runner": "mutation testing (Tier 1b)",
@@ -64,17 +66,13 @@ const DEV_DEPENDENCY_REASONS: Readonly<Record<string, string>> = {
 };
 
 describe("the package ships nothing", () => {
-  it("declares no runtime dependency of any kind", () => {
+  it("declares no runtime dependency of any kind, including the quieter ways one arrives", () => {
     expect(manifest.dependencies).toBeUndefined();
-    // The three quieter ways a runtime dependency arrives.
     expect(manifest.peerDependencies).toBeUndefined();
     expect(manifest.optionalDependencies).toBeUndefined();
   });
 
-  it("read the manifest it thinks it read", () => {
-    // Without this, every assertion above is also true of a file that does not
-    // exist, a manifest for another package, and `{}`. "No dependencies" has to
-    // be distinguishable from "nothing was read".
+  it("read the manifest it thinks it read, so \"no dependencies\" is distinguishable from \"nothing was read\"", () => {
     expect(manifest.name).toBe("@akimath/core");
     expect(Object.keys(manifest.devDependencies ?? {}).length).toBeGreaterThan(0);
   });
@@ -88,9 +86,7 @@ describe("the package ships nothing", () => {
     );
   });
 
-  it("the frozen contract is a development dependency and not a runtime one", () => {
-    // The single most likely regression in this file, and the one that would
-    // quietly reintroduce `zod` into a package whose whole point is having none.
+  it("the frozen contract is a development dependency and not a runtime one, the regression that would reintroduce `zod`", () => {
     expect(manifest.devDependencies?.["@akimath/contract"]).toBeDefined();
     expect(manifest.dependencies).toBeUndefined();
   });

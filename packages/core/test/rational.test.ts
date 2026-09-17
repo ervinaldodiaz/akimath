@@ -25,6 +25,41 @@ const pair = (value: Rational): [bigint, bigint] => [
   value.denominator,
 ];
 
+/**
+ * Every spelling of zero, including a negative denominator and a negative zero.
+ *
+ * Two zeroes that are not `equals` would be a defect nothing else in this file
+ * could see. `rationalOf` once carried a dead branch and a false comment for
+ * the negative-denominator case: BigInt has no negative zero (`-0n === 0n`),
+ * and `gcd(0, d)` is `|d|`, so the general reduction already lands on `0/1`.
+ * The branch is gone; the property is still checked.
+ */
+const ZEROES = [
+  [0n, 1n],
+  [0n, 5n],
+  [0n, -5n],
+  [-0n, 3n],
+] as const;
+
+/**
+ * The guard's own words, because here the message *is* the assertion.
+ *
+ * Delete either guard and the operation still throws — from `rationalOf`, about
+ * a denominator the caller never wrote — so matching on `/zero/` alone passes
+ * for a guard that is gone. The mutation report caught exactly that.
+ */
+const DIVIDE_BY_ZERO = /divide a rational by zero/;
+
+/** The reciprocal guard's own words, for the same reason. */
+const NO_RECIPROCAL = /no reciprocal/;
+
+/**
+ * 2^53 + 1 — the first integer past the point where a double silently stops
+ * counting, and the reason a rational is a pair of BigInts rather than a pair
+ * of numbers.
+ */
+const BEYOND_DOUBLE_PRECISION = 9007199254740993n;
+
 describe("a rational is always in normal form", () => {
   it("reduces to lowest terms", () => {
     expect(pair(r(4n, 8n))).toEqual([1n, 2n]);
@@ -38,20 +73,8 @@ describe("a rational is always in normal form", () => {
     expect(pair(r(-3n, 6n))).toEqual([-1n, 2n]);
   });
 
-  it("has exactly one representation of zero", () => {
-    // Two zeroes that are not `equals` would be a defect nothing else in this
-    // file could see, so the property is pinned across every sign of
-    // denominator — including the negative one, which is the case an earlier
-    // version of `rationalOf` carried a dead branch and a false comment for.
-    // BigInt has no negative zero (`-0n === 0n`), and `gcd(0, d)` is `|d|`, so
-    // the general reduction already lands on `0/1`. The branch is gone; the
-    // property is still checked.
-    for (const [n, d] of [
-      [0n, 1n],
-      [0n, 5n],
-      [0n, -5n],
-      [-0n, 3n],
-    ] as const) {
+  it("has exactly one representation of zero, at every sign of denominator", () => {
+    for (const [n, d] of ZEROES) {
       expect(pair(r(n, d))).toEqual([0n, 1n]);
     }
   });
@@ -61,20 +84,15 @@ describe("a rational is always in normal form", () => {
     expect(() => r(0n, 0n)).toThrow(/denominator/);
   });
 
-  it("two equal values are indistinguishable", () => {
-    // The property normal form exists for: if `4/8` and `1/2` differed, every
-    // comparison and every lookup downstream would be subtly wrong.
+  it("two equal values are indistinguishable, which every comparison and lookup downstream relies on", () => {
     expect(pair(r(4n, 8n))).toEqual(pair(r(1n, 2n)));
     expect(equals(r(4n, 8n), r(1n, 2n))).toBe(true);
   });
 
-  it("and unequal values are distinguishable", () => {
-    // Every other assertion about `equals` in this file asserts `true`, which
-    // is satisfied by a function that returns `true`. Both fields matter, so
-    // both are varied independently.
-    expect(equals(r(1n, 2n), r(1n, 3n))).toBe(false); // same numerator
-    expect(equals(r(1n, 2n), r(3n, 2n))).toBe(false); // same denominator
-    expect(equals(r(1n, 2n), r(-1n, 2n))).toBe(false); // sign only
+  it("and unequal values are distinguishable — the control for an `equals` that always returns true, with numerator, denominator and sign varied independently", () => {
+    expect(equals(r(1n, 2n), r(1n, 3n))).toBe(false);
+    expect(equals(r(1n, 2n), r(3n, 2n))).toBe(false);
+    expect(equals(r(1n, 2n), r(-1n, 2n))).toBe(false);
     expect(equals(r(0n), r(1n))).toBe(false);
   });
 
@@ -88,10 +106,8 @@ describe("a rational is always in normal form", () => {
 });
 
 describe("the arithmetic is exact", () => {
-  it("adds without touching a float", () => {
-    // 1/3 + 1/6 = 1/2. In binary floating point this is 0.49999999999999994.
+  it("adds without touching a float, including the starter pack's own fractions: a double makes 1/3 + 1/6 into 0.49999999999999994", () => {
     expect(pair(add(r(1n, 3n), r(1n, 6n)))).toEqual([1n, 2n]);
-    // The starter pack's own fraction items.
     expect(pair(add(r(3n, 4n), r(2n, 4n)))).toEqual([5n, 4n]);
     expect(pair(add(r(1n, 2n), r(1n, 3n)))).toEqual([5n, 6n]);
   });
@@ -109,25 +125,17 @@ describe("the arithmetic is exact", () => {
   });
 
   it("refuses division by zero, blaming the division and not a denominator", () => {
-    // The message is the assertion. Delete either guard and the operation still
-    // throws — from `rationalOf`, about a denominator the caller never wrote —
-    // so matching on `/zero/` alone passes for a guard that is gone. The
-    // mutation report caught exactly that.
-    expect(() => divide(r(1n), r(0n))).toThrow(/divide a rational by zero/);
-    expect(() => reciprocal(r(0n))).toThrow(/no reciprocal/);
+    expect(() => divide(r(1n), r(0n))).toThrow(DIVIDE_BY_ZERO);
+    expect(() => reciprocal(r(0n))).toThrow(NO_RECIPROCAL);
   });
 
   it("holds at magnitudes no double could", () => {
-    // The reason for BigInt rather than a numerator/denominator pair of
-    // numbers: past 2^53 a double silently stops counting.
-    const huge = 9007199254740993n; // 2^53 + 1
-    expect(pair(add(r(huge), r(1n)))).toEqual([9007199254740994n, 1n]);
-    expect(pair(multiply(r(huge), r(huge)))).toEqual([huge * huge, 1n]);
+    const beyond = BEYOND_DOUBLE_PRECISION;
+    expect(pair(add(r(beyond), r(1n)))).toEqual([9007199254740994n, 1n]);
+    expect(pair(multiply(r(beyond), r(beyond)))).toEqual([beyond * beyond, 1n]);
   });
 
-  it("does not grow denominators without reducing", () => {
-    // A naive add leaves 1/6 + 1/6 as 12/36. Unreduced, two equal values stop
-    // being equal and the magnitudes explode over a long computation.
+  it("does not grow denominators without reducing, which a naive add leaves as 12/36 and two equal values stop being equal", () => {
     expect(pair(add(r(1n, 6n), r(1n, 6n)))).toEqual([1n, 3n]);
   });
 });

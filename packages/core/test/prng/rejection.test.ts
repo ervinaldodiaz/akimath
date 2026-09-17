@@ -20,9 +20,61 @@ import {
  */
 const TWO_64 = 1n << 64n;
 
+/**
+ * The guard's own words, because here the message *is* the assertion.
+ *
+ * Delete the check and `rejectionLimit` divides by zero, so BigInt throws a
+ * `RangeError` of its own — asserting only the *type* therefore passes for a
+ * check that was deleted, which is precisely what the mutation report caught.
+ * The empty-range guard below is the same shape one layer up: without it `span`
+ * becomes zero and the `RangeError` arrives from two layers down, naming
+ * nothing the caller did.
+ */
+const SPAN_MUST_BE_POSITIVE = /span must be positive/;
+
+/** The empty-range guard's own words, for the reason above. */
+const EMPTY_RANGE = /empty range/;
+
+/**
+ * The high end of a range whose span rejects very nearly half of all words.
+ *
+ * **A small span cannot exercise rejection at all.** The first version of the
+ * tests below used a span of 3 and searched 100,000 draws for a rejected word;
+ * 2^64 mod 3 is 1, so exactly one word in 2^64 is rejected and the search was
+ * never going to find it. The rejection region is large only when the span is:
+ * at 2^63 + 1 the limit is 2^63 + 1 itself, so very nearly half of all words
+ * are rejected.
+ */
+const NEARLY_HALF_REJECTED_HIGH = 1n << 63n;
+
+/**
+ * The window the low half of a uniform draw must land in.
+ *
+ * Uniform is about 50%; the unrejected `word % span` form at this span maps two
+ * different words onto every value below 2^63 − 1 and one onto the rest, so it
+ * would come up low about 67% of the time. The band separates the two with room
+ * for sampling noise.
+ */
+const UNIFORM_LOW_SHARE = { atLeast: 0.44, atMost: 0.56 };
+
+/**
+ * A word source that never yields an acceptable word.
+ *
+ * **Found by falsification, not by design.** Flipping one bit of `MASK64`
+ * during the 2.6 matrix did not redden the suite — it hung the run, and the
+ * whole thing had to be killed. A hang reports nothing: no failing test, no
+ * message, just a job that eventually trips a timeout somebody has to go and
+ * read. The sibling package's `vitest.config.ts` already records that a
+ * synchronous infinite loop is not interruptible by the test runner at all.
+ *
+ * With the real kernel the convergence bound is unreachable by construction,
+ * which is what makes it the kind of guard that rots unverified. `drawBelow`
+ * takes its words as a value so a test can hand it a source that never yields.
+ */
+const alwaysRejected = (): bigint => (1n << 64n) - 1n;
+
 describe("the rejection threshold is the one the range requires", () => {
-  it("is 2^64 for a span that divides it", () => {
-    // A power of two divides 2^64 exactly, so nothing is ever rejected.
+  it("is 2^64 for a power of two, which divides it exactly so nothing is ever rejected", () => {
     for (const span of [1n, 2n, 256n, 1n << 32n]) {
       expect(rejectionLimit(span)).toBe(TWO_64);
     }
@@ -38,12 +90,8 @@ describe("the rejection threshold is the one the range requires", () => {
   });
 
   it("refuses a span that cannot be drawn from, and says why", () => {
-    // The message matters here, not just the throw. Without the guard, a span
-    // of zero divides by zero and BigInt throws a `RangeError` of its own — so
-    // asserting only the *type* passes for a check that was deleted, which is
-    // precisely what the mutation report caught.
-    expect(() => rejectionLimit(0n)).toThrow(/span must be positive/);
-    expect(() => rejectionLimit(-1n)).toThrow(/span must be positive/);
+    expect(() => rejectionLimit(0n)).toThrow(SPAN_MUST_BE_POSITIVE);
+    expect(() => rejectionLimit(-1n)).toThrow(SPAN_MUST_BE_POSITIVE);
   });
 });
 
@@ -59,9 +107,7 @@ describe("a bounded draw stays in range and reaches both ends", () => {
     expect(drawn).toBe(500);
   });
 
-  it("reaches both ends of the range", () => {
-    // The control for the test above, which a function returning a constant 3
-    // would also pass.
+  it("reaches both ends of the range — the control for a draw that returns a constant 3", () => {
     const seen = new Set<bigint>();
     for (let index = 0; index < 500; index += 1) {
       seen.add(intBetween(42n, index, 1n, 6n).value);
@@ -76,23 +122,11 @@ describe("a bounded draw stays in range and reaches both ends", () => {
   });
 
   it("an empty range is refused, and says so rather than dividing by zero", () => {
-    // Same shape as the span guard above: delete this check and `span` becomes
-    // zero, `rejectionLimit` divides by it, and a `RangeError` still comes out —
-    // from two layers down, naming nothing the caller did.
-    expect(() => intBetween(42n, 0, 5n, 4n)).toThrow(/empty range/);
+    expect(() => intBetween(42n, 0, 5n, 4n)).toThrow(EMPTY_RANGE);
   });
 
-  it("a rejected word consumes its index, so the draw stays a function of (seed, index)", () => {
-    // **A small span cannot exercise rejection at all.** The first version of
-    // this test used a span of 3 and searched 100,000 draws for a rejected
-    // word; 2^64 mod 3 is 1, so exactly one word in 2^64 is rejected and the
-    // search was never going to find it. The rejection region is large only
-    // when the span is: at 2^63 + 1 the limit is 2^63 + 1 itself, so very
-    // nearly half of all words are rejected.
-    //
-    // What is being proved: a rejected word still consumes its index, so two
-    // callers starting from the same index cannot diverge.
-    const high = 1n << 63n; // span = 2^63 + 1
+  it("a rejected word consumes its index, so two callers from the same index cannot diverge", () => {
+    const high = NEARLY_HALF_REJECTED_HIGH;
     const limit = rejectionLimit(high + 1n);
     expect(limit).toBe(high + 1n);
 
@@ -106,12 +140,8 @@ describe("a bounded draw stays in range and reaches both ends", () => {
     expect(nextIndex).toBeGreaterThan(rejectedAt + 1);
   });
 
-  it("rejection is what keeps a near-half span unbiased", () => {
-    // At span = 2^63 + 1 the naive `word % span` maps two different words onto
-    // every value below 2^63 − 1 and one onto the rest, so the low half would
-    // come up about twice as often. This is the case the threshold exists for,
-    // and it is worth one direct measurement rather than an argument.
-    const high = 1n << 63n;
+  it("rejection is what keeps a near-half span unbiased, measured rather than argued", () => {
+    const high = NEARLY_HALF_REJECTED_HIGH;
     const draws = 2_000;
     let low = 0;
     let cursor = 0;
@@ -120,46 +150,27 @@ describe("a bounded draw stays in range and reaches both ends", () => {
       cursor = drawn.nextIndex;
       if (drawn.value < high / 2n) low += 1;
     }
-    // Uniform would be ~50%. The biased form would be ~67%.
-    expect(low / draws).toBeGreaterThan(0.44);
-    expect(low / draws).toBeLessThan(0.56);
+    expect(low / draws).toBeGreaterThan(UNIFORM_LOW_SHARE.atLeast);
+    expect(low / draws).toBeLessThan(UNIFORM_LOW_SHARE.atMost);
   });
 
-  it("the draw is reproducible from (seed, index) alone", () => {
-    // The whole point. Same inputs, same answer, no matter what happened before.
+  it("the draw is reproducible from (seed, index) alone, whatever happened before it", () => {
     expect(intBetween(9n, 3, 1n, 1000n)).toEqual(intBetween(9n, 3, 1n, 1000n));
   });
 });
 
 describe("a broken kernel fails loudly instead of hanging", () => {
   it("gives up after a bounded number of rejections", () => {
-    // **Found by falsification, not by design.** Flipping one bit of `MASK64`
-    // during the 2.6 matrix did not redden the suite — it hung the run, and the
-    // whole thing had to be killed. A hang reports nothing: no failing test, no
-    // message, just a job that eventually trips a timeout somebody has to go
-    // and read. The sibling package's `vitest.config.ts` already records that a
-    // synchronous infinite loop is not interruptible by the test runner at all.
-    //
-    // With the real kernel this bound is unreachable by construction, which is
-    // what makes it the kind of guard that rots unverified. `drawBelow` takes
-    // its words as a value so a test can hand it a source that never yields.
-    const alwaysRejected = (): bigint => (1n << 64n) - 1n;
-
     expect(() => drawBelow(1n, 0, alwaysRejected)).toThrow(/did not converge/);
   });
 
-  it("rejects a word exactly equal to the limit", () => {
-    // The limit is exclusive, and this is the one boundary the whole scheme
-    // turns on: `q·span` maps onto residue 0, so accepting it is the bias the
-    // rejection exists to remove. `<` versus `<=` is invisible everywhere else.
+  it("rejects a word exactly equal to the exclusive limit, where q·span maps onto residue 0 and < differs from <=", () => {
     const words = (index: number): bigint => (index === 0 ? 10n : 3n);
 
     expect(drawBelow(10n, 0, words)).toEqual({ word: 3n, nextIndex: 2 });
   });
 
-  it("consumes exactly the bound before giving up", () => {
-    // Pins the bound itself. Off by one either way and this fails, which is
-    // what stops `< MAX` quietly becoming `<= MAX`.
+  it("consumes exactly the bound before giving up, which stops `< MAX` quietly becoming `<= MAX`", () => {
     let calls = 0;
     const never = (): bigint => {
       calls += 1;
@@ -170,8 +181,7 @@ describe("a broken kernel fails loudly instead of hanging", () => {
     expect(calls).toBe(100);
   });
 
-  it("returns as soon as a word is below the limit", () => {
-    // The control: a bound that fires for everything would also pass above.
+  it("returns as soon as a word is below the limit — the control for a bound that fires for everything", () => {
     const thirdIsFine = (index: number): bigint => (index < 2 ? 999n : 5n);
 
     expect(drawBelow(10n, 0, thirdIsFine)).toEqual({ word: 5n, nextIndex: 3 });

@@ -31,6 +31,15 @@ const NEIGHBOURS: readonly (readonly [number, number])[] = [
  * **PURE.** Grown rather than cut: a cage starts at an unassigned cell and
  * annexes an unassigned orthogonal neighbour at each step, so it is connected
  * by construction rather than by a check afterwards.
+ *
+ * **Cage start points are visited in reading order, not shuffled.** The growth
+ * is what varies; walking them in a random order as well would spend draws for
+ * no extra variety, because every unassigned cell starts a cage either way.
+ *
+ * A cage's ceiling costs one less draw than `MAX_CAGE_CELLS` suggests: a cage
+ * of one is common enough in a real KenKen to be worth offering. It is a
+ * ceiling and not a size, because growth may not reach it when the
+ * neighbourhood is already full.
  */
 export function cagePartition(seed: bigint, size: number): readonly CageCells[] {
   if (size < 3) {
@@ -44,19 +53,13 @@ export function cagePartition(seed: bigint, size: number): readonly CageCells[] 
   );
   const cages: GridCell[][] = [];
 
-  // Reading order, not a shuffle. The growth is what varies; walking the seeds
-  // in a random order as well would spend draws for no extra variety, because
-  // every unassigned cell starts a cage either way.
   for (let row = 0; row < size; row += 1) {
     for (let col = 0; col < size; col += 1) {
       if (taken[row]![col]!) {
         continue;
       }
-      // One less draw than the bound suggests: a cage of one is common enough
-      // in a real KenKen to be worth offering, and `wanted` is a ceiling that
-      // growth may not reach when the neighbourhood is full.
-      const wanted = 1 + draw(MAX_CAGE_CELLS - 1);
-      cages.push(grow({ row, col }, wanted, taken, size, draw));
+      const cageCeiling = 1 + draw(MAX_CAGE_CELLS - 1);
+      cages.push(grow({ row, col }, cageCeiling, taken, size, draw));
     }
   }
 
@@ -65,7 +68,7 @@ export function cagePartition(seed: bigint, size: number): readonly CageCells[] 
 
 function grow(
   start: GridCell,
-  wanted: number,
+  ceiling: number,
   taken: boolean[][],
   size: number,
   draw: Draw,
@@ -73,7 +76,7 @@ function grow(
   const cage: GridCell[] = [start];
   taken[start.row]![start.col] = true;
 
-  while (cage.length < wanted) {
+  while (cage.length < ceiling) {
     const options: GridCell[] = [];
     for (const cell of cage) {
       for (const [dr, dc] of NEIGHBOURS) {

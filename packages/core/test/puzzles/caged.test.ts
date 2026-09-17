@@ -1,3 +1,24 @@
+/**
+ * The caged batch: KenKen and Killer boards, proposed and then judged.
+ *
+ * `parsePuzzle` is the one authority, and it is the same function the pack
+ * builder and the device's reader answer to. A generator with its own idea of
+ * "solvable" would be a second implementation of the rules, free to disagree
+ * with the one that ships. So a candidate is proposed and never repaired: the
+ * generator cannot fix a refused square without deciding what the solution
+ * should have been, which is owning a solver. The payload's own consistency
+ * comes from the same place — `parsePuzzle` checks the declared solution
+ * against its own search, so a board paired with an unrelated square is
+ * refused there rather than here.
+ *
+ * A refusal is named, not merely counted. Killer at 5×5 rejects far more
+ * candidates than it keeps, and "the squares keep repeating a digit inside a
+ * cage" and "the solver found two answers" are different problems with
+ * different fixes: a single generic tag would hide which one is happening, and
+ * a collapse in hit rate has to stay tellable from a request that was simply
+ * small.
+ */
+
 import { readFileSync } from "node:fs";
 
 import { parsePuzzle, type PuzzleEnvelope } from "@akimath/contract";
@@ -13,11 +34,48 @@ const COPY: PuzzleCopy = {
 
 const SIZES = [3, 4, 5, 6] as const;
 
+/** Printed because the count is the evidence, not the green tick. */
+function reportBoardsAccepted(generator: string, boards: number): void {
+  console.log(`  ${generator} generator · ${boards} boards, all accepted by parsePuzzle`);
+}
+
+/**
+ * The payload of the first board an upward walk from seed one finds.
+ *
+ * A caller regenerating with `firstSeed = last + n` expects no overlap, so the
+ * direction matters: walking down would still find boards and still look
+ * reproducible.
+ */
+function firstAcceptedPayloadWalkingUp(size: number): unknown {
+  const found: unknown[] = [];
+  for (let seed = 1n; found.length === 0; seed += 1n) {
+    const candidate = cagedCandidate("kenken", seed, size);
+    if (candidate === null) {
+      continue;
+    }
+    const envelope = {
+      ...candidate,
+      tutorial_steps: [...COPY.tutorialSteps],
+      reference_sheet: [...COPY.referenceSheet],
+    };
+    if (parsePuzzle(envelope) === null) {
+      found.push(candidate.payload);
+    }
+  }
+  return found[0];
+}
+
+/**
+ * Seven is past the contract's 6×6 ceiling, so every candidate is refused on
+ * shape and no seed will ever help.
+ *
+ * An empty list that reads as "there was nothing to make" is the failure this
+ * prevents: the report says the budget ran out and names what refused it.
+ */
+const PAST_THE_CEILING = { kind: "kenken", size: 7, count: 1, firstSeed: 1n } as const;
+
 describe("every board a batch emits is one the contract accepts", () => {
   it("across both kinds and every supported size", () => {
-    // The same function the pack builder and the device's reader answer to.
-    // A generator with its own idea of "solvable" would be a second
-    // implementation of the rules, free to disagree with the one that ships.
     let boards = 0;
     for (const kind of ["kenken", "killer"] as const) {
       for (const size of SIZES) {
@@ -32,15 +90,11 @@ describe("every board a batch emits is one the contract accepts", () => {
         boards += batch.boards.length;
       }
     }
-    // ignore: the count is the evidence, not the green tick
-    console.log(`  caged generator · ${boards} boards, all accepted by parsePuzzle`);
+    reportBoardsAccepted("caged", boards);
     expect(boards).toBe(16);
   }, 120_000);
 
   it("the solution really is the board's, not a second one", () => {
-    // `parsePuzzle` checks the declared solution against the search, so this
-    // asserts the payload's own consistency: a generator that emitted a board
-    // and an unrelated square would fail above, and this names why.
     const batch = generateCagedBatch(
       { kind: "kenken", size: 4, count: 1, firstSeed: 7n },
       COPY,
@@ -65,22 +119,12 @@ describe("a batch is reproducible", () => {
   });
 
   it("seeds are consumed upward from the first", () => {
-    // A caller regenerating with `firstSeed = last + n` expects no overlap, so
-    // the direction matters: walking down would still find boards and still
-    // look reproducible.
     const batch = generateCagedBatch(
       { kind: "kenken", size: 4, count: 1, firstSeed: 1n },
       COPY,
     );
-    const ascending: unknown[] = [];
-    for (let seed = 1n; ascending.length === 0; seed += 1n) {
-      const candidate = cagedCandidate("kenken", seed, 4);
-      if (candidate !== null && parsePuzzle({ ...candidate, tutorial_steps: [...COPY.tutorialSteps], reference_sheet: [...COPY.referenceSheet] }) === null) {
-        ascending.push(candidate.payload);
-      }
-    }
 
-    expect(batch.boards[0]!.payload).toEqual(ascending[0]);
+    expect(batch.boards[0]!.payload).toEqual(firstAcceptedPayloadWalkingUp(4));
   });
 
   it("a different first seed is different boards", () => {
@@ -106,31 +150,17 @@ describe("the batch reports what it spent", () => {
     expect(batch.report.attempts).toBeGreaterThanOrEqual(2);
   });
 
-  it("a refused candidate is named by its tag", () => {
-    // Killer at 5×5 rejects far more candidates than it keeps, and the reason
-    // is worth reading: a collapse in hit rate has to be tellable from a
-    // request that was simply small.
+  it("a refused candidate is named by its tag, not merely counted", () => {
     const batch = generateCagedBatch({ kind: "killer", size: 5, count: 3, firstSeed: 1n }, COPY);
 
     expect(Object.keys(batch.report.refused).length).toBeGreaterThan(0);
-    // Named, not merely counted: "the squares keep repeating a digit inside a
-    // cage" and "the solver found two answers" are different problems with
-    // different fixes, and a single generic tag would hide which one is
-    // happening.
     expect(batch.report.refused).toHaveProperty('repeated_digit_in_cage');
     const refusedTotal = Object.values(batch.report.refused).reduce((a, b) => a + b, 0);
     expect(batch.report.attempts).toBe(batch.report.accepted + refusedTotal);
   });
 
   it("an impossible request exhausts its budget and says so", () => {
-    // Seven is past the contract's 6×6 ceiling, so every candidate is refused
-    // on shape and no seed will ever help. An empty list that reads as "there
-    // was nothing to make" is the failure this prevents — the report says the
-    // budget ran out and names what refused it.
-    const batch = generateCagedBatch(
-      { kind: "kenken", size: 7, count: 1, firstSeed: 1n },
-      COPY,
-    );
+    const batch = generateCagedBatch(PAST_THE_CEILING, COPY);
 
     expect(batch.boards).toEqual([]);
     expect(batch.report.exhausted).toBe(true);
@@ -138,9 +168,7 @@ describe("the batch reports what it spent", () => {
     expect(batch.report.refused).toHaveProperty("payload_shape", ATTEMPTS_PER_BOARD);
   }, 120_000);
 
-  it("a satisfiable request stops as soon as it is satisfied", () => {
-    // The budget is a ceiling, not a schedule: a generator that always spent it
-    // would pass the test above and take minutes per pack.
+  it("a satisfiable request stops early: the budget is a ceiling", () => {
     const batch = generateCagedBatch(
       { kind: "kenken", size: 4, count: 2, firstSeed: 1n },
       COPY,
@@ -152,8 +180,6 @@ describe("the batch reports what it spent", () => {
 
 describe("a candidate is proposed, never repaired", () => {
   it("a Killer square with a repeated digit in a cage is dropped", () => {
-    // The contract forbids it and the generator cannot fix it without deciding
-    // what the solution should have been — which is owning a solver.
     const dropped = Array.from({ length: 40 }, (_, i) =>
       cagedCandidate("killer", BigInt(i), 5),
     ).filter((candidate) => candidate === null);
@@ -161,10 +187,7 @@ describe("a candidate is proposed, never repaired", () => {
     expect(dropped.length).toBeGreaterThan(0);
   });
 
-  it("the generator holds no solver of its own", () => {
-    // The rule is architectural, so it is checked against the source rather
-    // than inferred from behaviour: a second implementation of "uniquely
-    // solvable" is free to disagree with the one that ships.
+  it("the generator holds no solver of its own, and the source says so", () => {
     const sources = ["src/puzzles/caged.ts", "src/puzzles/cages.ts", "src/puzzles/latin.ts"]
       .map((path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8"))
       .join("\n");

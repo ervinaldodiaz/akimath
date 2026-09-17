@@ -77,6 +77,13 @@ export function copyStrings(
   return [...lookup.values()].flatMap((copy) => [copy.explain, ...copy.steps]);
 }
 
+/**
+ * Decoded JSON held to the frozen schema's rules, keyed by misconception.
+ *
+ * **The scolding sweep runs at parse time**, so copy that names the failure
+ * cannot reach a pack even where the caller forgets to look for it — the check
+ * is not something a call site can be trusted to remember.
+ */
 export function parseMisconceptions(
   value: unknown,
 ): ReadonlyMap<string, MisconceptionCopy> {
@@ -113,8 +120,6 @@ export function parseMisconceptions(
     throw new TypeError("misconceptions: the file declares none");
   }
 
-  // Swept at parse time, so copy that scolds cannot reach a pack even if the
-  // caller forgets to look.
   const offences = scoldings(copyStrings(lookup));
   if (offences.length > 0) {
     throw new TypeError(`misconceptions: the copy names the failure — ${offences.join("; ")}`);

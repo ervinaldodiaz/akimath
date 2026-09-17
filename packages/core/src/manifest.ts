@@ -127,15 +127,20 @@ export function fromManifestEntry(value: unknown): ManifestEntry | null {
   }
 }
 
+/**
+ * A template entry read back, or null if the object is not one.
+ *
+ * **A numeric `seed` is refused rather than converted.** That is the bug
+ * migration 0002 exists to prevent, and by the time the value reaches this
+ * function it has already lost precision, so there is nothing left to recover:
+ * a `string` is the only spelling that can be trusted.
+ */
 function _templateEntry(entry: Record<string, unknown>): TemplateManifestEntry | null {
   const { template_id, template_version, seed, ladder_step } = entry;
   if (
     typeof template_id !== "string" ||
     typeof template_version !== "number" ||
     !Number.isInteger(template_version) ||
-    // A number here is the bug migration 0002 exists to prevent, and it has
-    // already lost precision by the time it reaches this function — so it is
-    // refused rather than converted.
     typeof seed !== "string" ||
     !/^-?\d+$/u.test(seed) ||
     typeof ladder_step !== "number" ||

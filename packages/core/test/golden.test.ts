@@ -7,6 +7,16 @@ import { buildPrngGolden } from "../src/prng/golden.js";
 import { buildRatingGolden } from "../src/rating/golden.js";
 
 /**
+ * Nothing in these artifacts that can exceed 2^53 is written as a JSON number,
+ * and **that already cost a migration.**
+ *
+ * `offline_packs.template_refs` stored a seed as a JSON number and `JSON.parse`
+ * rounded it: 9223372036854775807 came back 9223372036854776000. Because
+ * splitmix64 avalanches, a seed off by one rederives an unrelated item and every
+ * schema is still happy.
+ */
+
+/**
  * The committed artifacts are **replayed from disk**, not recomputed.
  *
  * A test that calls the builder twice and compares the results to each other
@@ -27,6 +37,18 @@ function committed(name: string): unknown {
 
 /** What the emitter writes, as JSON sees it. */
 const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+/**
+ * The same digits parsed as a JSON *number*, which is where they stop
+ * surviving.
+ *
+ * It is compared as a **string**, because in JavaScript the literal
+ * `9223372036854775807` is itself already `9223372036854776000` — comparing the
+ * two numbers compares two copies of the same rounding, which is how a control
+ * quietly stops controlling anything.
+ */
+const roundedByJsonNumber = (): number =>
+  JSON.parse('{"n":9223372036854775807}').n as number;
 
 describe("the committed golden artifacts are what the code produces", () => {
   it("the PRNG vector", () => {
@@ -59,10 +81,6 @@ describe("the committed golden artifacts are what the code produces", () => {
 
 describe("nothing that can exceed 2^53 is written as a JSON number", () => {
   it("every seed, word and rational component is a string", () => {
-    // **This already cost a migration.** `offline_packs.template_refs` stored a
-    // seed as a JSON number and `JSON.parse` rounded it: 9223372036854775807
-    // came back 9223372036854776000. Because splitmix64 avalanches, a seed off
-    // by one rederives an unrelated item and every schema is still happy.
     const prng = committed("prng.golden.json") as {
       seeds: { seed: unknown; words: unknown[]; d6: unknown[] }[];
     };
@@ -87,12 +105,7 @@ describe("nothing that can exceed 2^53 is written as a JSON number", () => {
 
     expect(seeds).toContain(9223372036854775807n);
     expect(seeds).toContain(-9223372036854775808n);
-    // The control: as a JSON number this one does not survive. Compared as
-    // *strings*, because in JavaScript the literal `9223372036854775807` is
-    // itself already `9223372036854776000` — comparing the two numbers compares
-    // two copies of the same rounding, which is how a control quietly stops
-    // controlling anything.
-    const asNumber: number = JSON.parse('{"n":9223372036854775807}').n as number;
+    const asNumber: number = roundedByJsonNumber();
     expect(String(asNumber)).not.toBe("9223372036854775807");
     expect(String(BigInt("9223372036854775807"))).toBe("9223372036854775807");
   });

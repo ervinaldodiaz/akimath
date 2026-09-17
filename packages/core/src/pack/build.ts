@@ -67,7 +67,25 @@ export interface BuildResult {
   readonly report: BuildReport;
 }
 
-/** One generated item, in the frozen envelope. */
+/**
+ * One generated item, in the frozen envelope.
+ *
+ * **One resolve, two answers.** The template both generates the item and says
+ * which skill it exercises; asking the registry twice would let a future
+ * `rederive` and a future `resolve` disagree about which version answered.
+ *
+ * The template carries an exact `Rational` and never a string, because
+ * rendering belongs to the contract — which already owns what `5/4` looks
+ * like and is checked against Dart on the same fixture.
+ *
+ * **The shape and the spelling are one decision, and used to be two here.**
+ * This computed them separately and the spelling always carried a
+ * denominator, so a whole answer of −9 was digested as `-9/1` while
+ * `answer.shape` said `integer`. `storedAnswer` is now that decision, in
+ * `packages/contract`, because the two other producers — `lift.ts` beside
+ * this file, and the server grading a rederived item — have to make the same
+ * one. Held by `test/one-way-to-spell-an-answer.test.ts`.
+ */
 function fromTemplate(
   declaration: Declaration,
   registry: TemplateRegistry,
@@ -75,9 +93,6 @@ function fromTemplate(
   seedIndex: number,
   misconceptions: ReadonlyMap<string, DiagnosisCopy>,
 ): Item {
-  // **One resolve, two answers.** The template both generates the item and says
-  // which skill it exercises; asking the registry twice would let a future
-  // `rederive` and a future `resolve` disagree about which version answered.
   const template = resolve(registry, source);
   const generated = template.generate({
     templateId: source.templateId,
@@ -86,17 +101,6 @@ function fromTemplate(
     ladderStep: source.ladderStep,
   });
 
-  // The template carries an exact `Rational` and never a string, because
-  // rendering belongs to the contract — which already owns what `5/4` looks
-  // like and is checked against Dart on the same fixture.
-  //
-  // **The shape and the spelling are one decision, and used to be two here.**
-  // This computed them separately and the spelling always carried a
-  // denominator, so a whole answer of −9 was digested as `-9/1` while
-  // `answer.shape` said `integer`. `storedAnswer` is now that decision, in
-  // `packages/contract`, because the two other producers — `lift.ts` beside
-  // this file, and the server grading a rederived item — have to make the same
-  // one. Held by `test/one-way-to-spell-an-answer.test.ts`.
   const { shape, canonical } = storedAnswer(
     generated.answer.numerator,
     generated.answer.denominator,
@@ -154,6 +158,26 @@ function diagnosisFor(
   } as Item["diagnosis"];
 }
 
+/**
+ * The declared sources, assembled in order into one validated pack.
+ *
+ * **The seed counter spans the whole build, not each source**, so two template
+ * sources never issue the same seed. `generated` is that counter and the
+ * figure the report carries, which is one fact read twice rather than two.
+ *
+ * **Puzzles are carried through as authored, not transformed**: the frozen
+ * envelope is what the file already holds, and rewriting it here would be a
+ * second opinion about a format this package does not own.
+ *
+ * **Every skill an item names is declared available.** The lattice that
+ * decides what is locked is the skill map's, at F5; a pack that declared
+ * everything locked would be a pack with nothing to play.
+ *
+ * **Validated here, before anything is written.** The CLI cannot be the only
+ * place this happens: a caller that assembled a pack and skipped the check
+ * would produce something no reader accepts, and the failure would surface on
+ * a device rather than in a build.
+ */
 export function buildPack(
   declaration: Declaration,
   inputs: BuildInputs,
@@ -166,8 +190,6 @@ export function buildPack(
   for (const source of declaration.sources) {
     if (source.kind === "template") {
       for (let n = 0; n < source.count; n += 1) {
-        // The counter spans the whole build, not each source, so two template
-        // sources never issue the same seed.
         items.push(
           fromTemplate(declaration, inputs.registry, source, generated, inputs.misconceptions),
         );
@@ -176,9 +198,6 @@ export function buildPack(
       continue;
     }
     if (source.kind === "puzzles") {
-      // Carried through as authored, not transformed: the frozen envelope is
-      // what the file already holds, and rewriting it here would be a second
-      // opinion about a format this package does not own.
       for (const puzzle of readPuzzleFile(inputs.readAuthored(source.path))) {
         puzzles.push(puzzle);
       }
@@ -207,9 +226,6 @@ export function buildPack(
     pack_salt: declaration.packSalt,
     issued_at: declaration.issuedAt,
     expires_at: declaration.expiresAt,
-    // Every skill an item names is declared available. The lattice that decides
-    // what is locked is the skill map's, at F5; a pack that declared everything
-    // locked would be a pack with nothing to play.
     skill_nodes: skillIds.map((skill_id) => ({ skill_id, state: "available" as const })),
     skill_fallbacks: skillIds.map((skill_id) => ({
       skill_id,
@@ -219,10 +235,6 @@ export function buildPack(
     puzzles,
   };
 
-  // **Validated here, before anything is written.** The CLI cannot be the only
-  // place this happens: a caller that assembled a pack and skipped the check
-  // would produce something no reader accepts, and the failure would surface on
-  // a device rather than in a build.
   const verdict = parsePack(pack);
   if (!verdict.ok) {
     throw new TypeError(`the assembled pack is not valid: ${verdict.tag}`);

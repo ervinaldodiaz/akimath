@@ -45,13 +45,15 @@ export interface Batch {
  * generator that quietly produces four boards when asked for ten looks exactly
  * like one that was asked for four, and the difference matters the moment
  * someone widens the size range and the hit rate collapses.
+ *
+ * `repeated_digit_in_cage` is a Killer-only decline: a cage the Latin square
+ * gave a repeated digit. The proposer names it rather than folding it into one
+ * generic tag, so a collapse in hit rate can be told apart from a contract
+ * rejection.
  */
 export function generateCagedBatch(request: BatchRequest, copy: PuzzleCopy): Batch {
   return collectBatch(request.count, request.firstSeed, copy, (seed) => {
     const candidate = cagedCandidate(request.kind, seed, request.size);
-    // Killer only: a cage the Latin square gave a repeated digit. Named by the
-    // proposer rather than folded into one generic tag, so a collapse in hit
-    // rate can be told apart from a contract rejection.
     return candidate === null
       ? "repeated_digit_in_cage"
       : { kind: candidate.kind, payload: candidate.payload };

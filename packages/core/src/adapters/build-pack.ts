@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "../registry.js";
 import { CORE_REGISTRY } from "../templates/index.js";
 import { buildPack } from "../pack/build.js";
-import { parseDeclaration } from "../pack/declaration.js";
+import { parseDeclaration, type Declaration } from "../pack/declaration.js";
 import { fallbackDiagnosis, misconceptionCopy } from "../pack/misconceptions.js";
 import { flag } from "./flags.js";
 
@@ -33,21 +33,15 @@ const here = (relative: string): string =>
 const DECLARATION = path.resolve(flag("declaration", here("../../content/pack.declaration.json")));
 const OUT = path.resolve(flag("out", here("../../pack/starter.json")));
 
-function main(): void {
-  // The copy is a value in `src/pack/misconception-copy.ts` now, not a file
-  // this script reads: `packages/server` issues packs inside a request and
-  // needs the same words, and one source is the only way the two agree.
-  const misconceptions = misconceptionCopy();
-  const fallbackCopy = fallbackDiagnosis();
-
-  const declaration = parseDeclaration(
-    JSON.parse(readFileSync(DECLARATION, "utf8")),
-  );
-
-  // Puzzles belong to no skill, so only the item sources contribute one — and a
-  // template source contributes its *template's*, which is the only place that
-  // fact is written down now.
-  const skillIds = new Set(
+/**
+ * Every skill the declaration's items are filed under.
+ *
+ * Puzzles belong to no skill, so only the item sources contribute one — and a
+ * template source contributes its *template's*, which is the only place that
+ * fact is written down now.
+ */
+function skillIdsOfItemSources(declaration: Declaration): Set<number> {
+  return new Set(
     declaration.sources.flatMap((source) => {
       switch (source.kind) {
         case "puzzles":
@@ -59,21 +53,64 @@ function main(): void {
       }
     }),
   );
+}
+
+/**
+ * The boards a pack carries, counted per kind rather than listed.
+ *
+ * A pack carrying four KenKens used to print "kenken" four times, which reads
+ * as a bug in the report rather than as content.
+ */
+function describePuzzles(puzzleKinds: readonly string[]): string {
+  if (puzzleKinds.length === 0) {
+    return "no puzzles";
+  }
+  const perKind = new Map<string, number>();
+  for (const kind of puzzleKinds) {
+    perKind.set(kind, (perKind.get(kind) ?? 0) + 1);
+  }
+  return `${puzzleKinds.length} puzzles (${[...perKind.entries()]
+    .map(([kind, n]) => `${kind} ${n}`)
+    .join(", ")})`;
+}
+
+/**
+ * Reads the declaration, builds the pack from it and writes the artifact.
+ *
+ * **The diagnosis copy is a value in `src/pack/misconception-copy.ts`**, not a
+ * file this script reads: `packages/server` issues packs inside a request and
+ * needs the same words, and one source is the only way the two agree.
+ *
+ * **An authored path is resolved relative to the declaration**, so the
+ * declaration is portable and the path is data rather than a constant compiled
+ * into this file.
+ *
+ * **The artifact is written through a temporary file.** `> out` truncates
+ * before the producer has run, so a refusal — or an unreadable source — used to
+ * leave the committed artifact destroyed and the tree dirty for an unrelated
+ * reason; `scripts/dump-schema.sh` did exactly that, which is why this does
+ * not. A failed write unlinks the temporary and rethrows, and if that unlink
+ * also fails there is nothing to clean up: the original is untouched either
+ * way.
+ */
+function main(): void {
+  const misconceptions = misconceptionCopy();
+  const fallbackCopy = fallbackDiagnosis();
+
+  const declaration = parseDeclaration(
+    JSON.parse(readFileSync(DECLARATION, "utf8")),
+  );
+
+  const skillIds = skillIdsOfItemSources(declaration);
 
   const { pack, report } = buildPack(declaration, {
     registry: CORE_REGISTRY,
-    // Relative to the declaration, so the declaration is portable and the path
-    // is data rather than a constant compiled into this file.
     readAuthored: (relative) =>
       readFileSync(path.resolve(path.dirname(DECLARATION), relative), "utf8"),
     fallbacks: new Map([...skillIds].map((id) => [id, fallbackCopy])),
     misconceptions,
   });
 
-  // **Written through a temporary file.** `> out` truncates before the producer
-  // has run, so a refusal — or an unreadable source — used to leave the
-  // committed artifact destroyed and the tree dirty for an unrelated reason.
-  // `scripts/dump-schema.sh` did exactly that, which is why this does not.
   mkdirSync(path.dirname(OUT), { recursive: true });
   const temporary = `${OUT}.tmp`;
   try {
@@ -82,24 +119,11 @@ function main(): void {
   } catch (cause) {
     try {
       unlinkSync(temporary);
-    } catch {
-      // Nothing to clean up. The original is untouched either way.
-    }
+    } catch {}
     throw cause;
   }
 
-  // Counted per kind rather than listed: a pack carrying four KenKens used to
-  // print "kenken" four times, which reads as a bug in the report rather than
-  // as content.
-  const perKind = new Map<string, number>();
-  for (const kind of report.puzzleKinds) {
-    perKind.set(kind, (perKind.get(kind) ?? 0) + 1);
-  }
-  const puzzles = report.puzzleKinds.length === 0
-    ? "no puzzles"
-    : `${report.puzzleKinds.length} puzzles (${[...perKind.entries()]
-        .map(([kind, n]) => `${kind} ${n}`)
-        .join(", ")})`;
+  const puzzles = describePuzzles(report.puzzleKinds);
   const families = [...report.byFamily.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([kind, n]) => `${kind} ${n}`)
@@ -113,11 +137,19 @@ function main(): void {
   );
 }
 
+/**
+ * Reports a refusal and stops the build.
+ *
+ * A refusal is content that needs fixing, not a crash to debug: one line, and a
+ * non-zero exit so a build stops rather than committing nothing.
+ */
+function refuse(cause: unknown): void {
+  process.stderr.write(`build:pack refused — ${(cause as Error).message}\n`);
+  process.exitCode = 1;
+}
+
 try {
   main();
 } catch (cause) {
-  // A refusal is content that needs fixing, not a crash to debug. One line,
-  // and a non-zero exit so a build stops rather than committing nothing.
-  process.stderr.write(`build:pack refused — ${(cause as Error).message}\n`);
-  process.exitCode = 1;
+  refuse(cause);
 }

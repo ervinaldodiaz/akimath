@@ -53,6 +53,16 @@ function authoredBoards(): readonly AuthoredBoard[] {
   }));
 }
 
+/**
+ * The characters a KenKen cage can print in its corner.
+ *
+ * Taken from the renderer rather than from the rules: `puzzle_board_view.dart`
+ * draws `'${target}${operation}'`, so these are literally what a player sees —
+ * including the **ASCII hyphen**, which the sheet that shipped spelled as the
+ * minus sign U+2212.
+ */
+const CAGE_OPERATORS = ["+", "-", "×", "÷"] as const;
+
 /** Every kind, at a size it is actually drawn at somewhere. */
 const KINDS: readonly BuildableKind[] = [
   "kenken",
@@ -63,9 +73,8 @@ const KINDS: readonly BuildableKind[] = [
 ];
 
 describe("the reference sheet", () => {
-  it("says the same thing everywhere it is written down", () => {
+  it("says the same thing everywhere it is written down, over a board list asserted non-empty", () => {
     const boards = authoredBoards();
-    // PROC-10 — a sweep over an empty list proves nothing.
     expect(boards.length).toBeGreaterThan(0);
 
     const drifted = boards.filter(
@@ -90,38 +99,28 @@ describe("the reference sheet", () => {
   });
 
   it("states the objective in its first line", () => {
-    // The defect a player hit within two minutes: three lines of constraint and
-    // nothing saying what you are supposed to do with the board.
     for (const kind of KINDS) {
       expect(referenceSheetFor(kind, 4)[0]).toMatch(/^(Llena|Encuentra)\b/u);
     }
   });
 
-  it("names the range of numbers a board of that size takes", () => {
+  it("names the range a board of that size takes: a magic square runs to its cell count, and kakuro is nine digits whatever it measures", () => {
     expect(referenceSheetFor("kenken", 3)[0]).toContain("del 1 al 3");
     expect(referenceSheetFor("kenken", 5)[0]).toContain("del 1 al 5");
     expect(referenceSheetFor("killer", 4)[0]).toContain("del 1 al 4");
-    // A magic square holds one of every number up to the count of its cells,
-    // which is the fact the old sheet spelled as "el total de casillas".
     expect(referenceSheetFor("magicSquare", 3)[0]).toContain("del 1 al 9");
     expect(referenceSheetFor("magicSquare", 4)[0]).toContain("del 1 al 16");
-    // Kakuro is nine digits whatever the board measures.
     expect(referenceSheetFor("kakuro", 6)[0]).toContain("del 1 al 9");
   });
 
   it("explains every operator a KenKen cage can carry, not only the minus", () => {
-    // `puzzle_board_view.dart` renders `'${target}${operation}'`, so these are
-    // the characters printed in the corner of a cage — including the ASCII
-    // hyphen, which the old sheet spelled as U+2212.
     const vocabulary = referenceSheetFor("kenken", 4)[1];
-    for (const operator of ["+", "-", "×", "÷"]) {
+    for (const operator of CAGE_OPERATORS) {
       expect(vocabulary).toContain(operator);
     }
   });
 
   it("says what a jaula looks like before using the word", () => {
-    // The third defect: *jaula* appeared three times and the dashed pink
-    // outline that is one was never named.
     for (const kind of ["kenken", "killer"] as const) {
       const sheet = referenceSheetFor(kind, 4);
       const introduction = sheet.find((line) => line.includes("jaula"));

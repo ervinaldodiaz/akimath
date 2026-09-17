@@ -19,14 +19,24 @@ import type { GeneratedItem, Template, TemplateRef } from "../../template.js";
  */
 const MINUEND = 0;
 
+/**
+ * The draw range a ladder step opens.
+ *
+ * Step 1–2 stay inside a single digit; higher steps widen. Deliberately
+ * simple: the shape of the ladder is content's business, and freezing an
+ * elaborate curve here would be inventing it.
+ */
 function rangeFor(ladderStep: number): { readonly low: bigint; readonly high: bigint } {
-  // Step 1–2 stay inside a single digit; higher steps widen. Deliberately
-  // simple: the shape of the ladder is content's business, and freezing an
-  // elaborate curve here would be inventing it.
   const high = BigInt(ladderStep) * 10n;
   return { low: 1n, high };
 }
 
+/**
+ * One item, a function of `(seed, ladderStep)` and nothing else.
+ *
+ * The prompt's operator is U+2212, the minus sign the brand requires — never a
+ * hyphen.
+ */
 export function generateV1(ref: TemplateRef): GeneratedItem {
   const { low, high } = rangeFor(ref.ladderStep);
 
@@ -39,7 +49,6 @@ export function generateV1(ref: TemplateRef): GeneratedItem {
   return {
     prompt: [
       { kind: "text", value: left.toString() },
-      // U+2212, the minus sign the brand requires — never a hyphen.
       { kind: "operator", glyph: "−" },
       { kind: "text", value: right.toString() },
       { kind: "operator", glyph: "=" },
@@ -55,9 +64,11 @@ export function generateV1(ref: TemplateRef): GeneratedItem {
 export const arithIntegerSubtractV1: Template = Object.freeze({
   id: "arith.integer.subtract",
   version: 1,
-  // Skill 1, the same one `content/pack.declaration.json` files its authored
-  // items under. The declaration no longer says so for a template source: it
-  // is read from here, so the two cannot disagree.
+  /**
+   * Skill 1, the same one `content/pack.declaration.json` files its authored
+   * items under. The declaration no longer says so for a template source: it
+   * is read from here, so the two cannot disagree.
+   */
   skillId: 1,
   generate: generateV1,
 });

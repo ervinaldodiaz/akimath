@@ -1,19 +1,28 @@
+/**
+ * `drawsFrom` is a cursor over one seed's stream, and both properties here are
+ * asserted against the stream itself rather than against a range — a cursor
+ * that reset its index on every call would return values in range for ever.
+ *
+ * A choice with one option must consume no index. Spending a word on it would
+ * make the stream depend on the *shape* of the board rather than only on its
+ * seed, so two boards differing in one cage size would diverge from that point
+ * on. `grow` and Fisher–Yates both reach a bound of zero or below: an empty
+ * neighbourhood and a one-element tail are ordinary, not errors.
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { intBetween } from "../../src/prng/splitmix64.js";
 import { drawsFrom } from "../../src/puzzles/draw.js";
 
 describe("a cursor over one seed's stream", () => {
-  it("its draws are the stream's, in order", () => {
-    // Not "some number in range": the exact words `intBetween` yields at index
-    // 0, 1, 2. A cursor that reset its index every call would still return
-    // values in range, forever.
+  it("its draws are the stream's own words, at index 0, 1 and 2", () => {
     const draw = drawsFrom(99n);
-    const first = intBetween(99n, 0, 0n, 5n);
-    const second = intBetween(99n, first.nextIndex, 0n, 5n);
+    const wordAtIndexZero = intBetween(99n, 0, 0n, 5n);
+    const wordAtTheNextIndex = intBetween(99n, wordAtIndexZero.nextIndex, 0n, 5n);
 
-    expect(draw(5)).toBe(Number(first.value));
-    expect(draw(5)).toBe(Number(second.value));
+    expect(draw(5)).toBe(Number(wordAtIndexZero.value));
+    expect(draw(5)).toBe(Number(wordAtTheNextIndex.value));
   });
 
   it("two cursors on one seed agree", () => {
@@ -35,16 +44,10 @@ describe("a choice with one option costs nothing", () => {
   });
 
   it("a negative bound draws zero rather than throwing", () => {
-    // `grow` and Fisher–Yates both reach it: an empty neighbourhood and a
-    // one-element tail are ordinary, not errors.
     expect(drawsFrom(1n)(-1)).toBe(0);
   });
 
   it("it consumes no index", () => {
-    // The behaviour that matters: spending a word on a choice with one option
-    // would make the stream depend on the *shape* of the board rather than only
-    // on its seed, so two boards differing in one cage size would diverge from
-    // that point on.
     const withZeros = drawsFrom(5n);
     withZeros(0);
     withZeros(0);

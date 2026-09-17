@@ -47,28 +47,44 @@ function oracleStream(seed: bigint, count: number): bigint[] {
   return out;
 }
 
-const SEEDS: readonly bigint[] = [
-  0n,
-  1n,
-  2n,
-  255n,
-  4294967295n, // 2^32 − 1, where a 32-bit implementation would break
-  4294967296n, // 2^32
-  9223372036854775807n, // 2^63 − 1, the top of a signed Postgres bigint
-  9223372036854775808n, // 2^63
-  18446744073709551615n, // 2^64 − 1
-  -1n, // a signed bigint from the database
-  -9223372036854775808n, // the bottom of a signed Postgres bigint
-  1477776061723855037n,
+/**
+ * Seeds spanning the whole 64-bit range rather than sampling its middle, each
+ * named by the case it covers.
+ *
+ * The negative ones are not hypothetical: a seed arrives from a signed Postgres
+ * `bigint`, so `-1` and that column's minimum are real inputs.
+ */
+const SEEDS: ReadonlyArray<{ name: string; seed: bigint }> = [
+  { name: "zero", seed: 0n },
+  { name: "one", seed: 1n },
+  { name: "two", seed: 2n },
+  { name: "255", seed: 255n },
+  {
+    name: "2^32 − 1, where a 32-bit implementation would break",
+    seed: 4294967295n,
+  },
+  { name: "2^32", seed: 4294967296n },
+  {
+    name: "2^63 − 1, the top of a signed Postgres bigint",
+    seed: 9223372036854775807n,
+  },
+  { name: "2^63", seed: 9223372036854775808n },
+  { name: "2^64 − 1", seed: 18446744073709551615n },
+  { name: "-1, as a signed column spells it", seed: -1n },
+  {
+    name: "the bottom of a signed Postgres bigint",
+    seed: -9223372036854775808n,
+  },
+  { name: "an arbitrary value", seed: 1477776061723855037n },
 ];
 
 describe("two implementations, two notations, one stream", () => {
   it("agrees with the oracle across the whole seed range", () => {
     let compared = 0;
-    for (const seed of SEEDS) {
+    for (const { name, seed } of SEEDS) {
       const expected = oracleStream(seed, 16);
       for (const [index, word] of expected.entries()) {
-        expect(wordAt(seed, index), `seed ${seed}, index ${index}`).toBe(word);
+        expect(wordAt(seed, index), `seed ${name}, index ${index}`).toBe(word);
         compared += 1;
       }
     }
@@ -83,9 +99,7 @@ describe("two implementations, two notations, one stream", () => {
     }
   });
 
-  it("the oracle disagrees when the implementation is wrong", () => {
-    // Without this the whole file passes for two functions that both return
-    // zero. A deliberately-wrong mixer must be caught by the same comparison.
+  it("the oracle disagrees when the implementation is wrong, which two functions both returning zero would not", () => {
     const wrong = (state: bigint): bigint => u64(state * M1);
     expect(wrong(12345n)).not.toBe(oracleMix(12345n));
   });

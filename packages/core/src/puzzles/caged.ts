@@ -43,20 +43,23 @@ const GIVEN_CELLS = 2;
  * ships, and the disagreement surfaces as a board a player cannot finish,
  * offline, with no way to report it.
  *
+ * **Three decisions, three streams.** The square, the partition and the
+ * labelling all draw from the same seed, and reading them off the same stream
+ * would make each choice a function of the ones before it in a way nothing
+ * states. `mix64` is the kernel's own mixing step, so a derived seed is as good
+ * as an independent one and costs one multiply.
+ *
  * Returns null when the square and partition cannot be labelled at all — a
  * Killer cage holding a repeated digit, which the contract forbids and this
- * cannot repair without becoming that second implementation.
+ * cannot repair without becoming that second implementation. A Latin square
+ * happily puts the same digit in two cells of one cage, so that is a real
+ * outcome rather than a defensive branch.
  */
 export function cagedCandidate(
   kind: CagedKind,
   seed: bigint,
   size: number,
 ): CagedCandidate | null {
-  // **Three decisions, three streams.** The square, the partition and the
-  // labelling all draw from the same seed, and reading them off the same stream
-  // would make each choice a function of the ones before it in a way nothing
-  // states. `mix64` is the kernel's own mixing step, so a derived seed is as
-  // good as an independent one and costs one multiply.
   const partitionSeed = mix64(seed);
   const labelSeed = mix64(partitionSeed);
 
@@ -70,9 +73,8 @@ export function cagedCandidate(
   for (const cage of cages) {
     const values = cage.map(valueAt);
     if (kind === "killer") {
-      // The contract requires a Killer cage's digits to be distinct, and a
-      // Latin square happily puts the same digit in two cells of one cage.
-      if (new Set(values).size !== values.length) {
+      const digitsAreDistinct = new Set(values).size === values.length;
+      if (!digitsAreDistinct) {
         return null;
       }
       labelled.push({ cells: cage, target: values.reduce((a, b) => a + b, 0) });
@@ -101,6 +103,12 @@ export function cagedCandidate(
  * A pair may support all four; a longer cage supports `+` and `×` only,
  * because a difference and a quotient are defined for two numbers — a rule the
  * contract states and this respects rather than restates.
+ *
+ * **A pair's difference is never zero, and there is no guard against it.** A
+ * two-cell cage is a cell and an orthogonal neighbour, so the pair shares a row
+ * or a column — and a Latin square never repeats a digit along either. A guard
+ * here could not fire, and an unreachable guard is a claim about the code that
+ * nothing checks.
  */
 function kenKenCage(
   cells: CageCells,
@@ -120,11 +128,6 @@ function kenKenCage(
 
   if (values.length === 2) {
     const [a, b] = [Math.max(values[0]!, values[1]!), Math.min(values[0]!, values[1]!)];
-    // **The difference is never zero, and there is no guard against it.** A
-    // two-cell cage is a cell and an orthogonal neighbour, so the pair shares a
-    // row or a column — and a Latin square never repeats a digit along either.
-    // A guard here could not fire, and an unreachable guard is a claim about
-    // the code that nothing checks.
     options.push({ cells, operation: "-", target: a - b });
     if (a % b === 0) {
       options.push({ cells, operation: "÷", target: a / b });
@@ -146,6 +149,10 @@ function kenKenCage(
  * Every chosen cell belongs to a cage of this board, so no bounds filter
  * follows: one would be unreachable, and an unreachable guard is a claim about
  * the code that nothing checks.
+ *
+ * The result is sorted, so the emitted payload's shape does not turn on the
+ * order the draws happened to come out in — the pack is byte-diffed, and a
+ * stable order is what makes that diff readable.
  */
 function givenCells(cages: readonly CageCells[], draw: Draw): GridCell[] {
   const wanted = Math.min(GIVEN_CELLS, cages.length);
@@ -156,8 +163,5 @@ function givenCells(cages: readonly CageCells[], draw: Draw): GridCell[] {
       const cage = cages[at]!;
       return cage[draw(cage.length - 1)]!;
     })
-    // Sorted, so the emitted payload does not depend on draw order for its
-    // shape — the pack is byte-diffed and a stable order is what makes that
-    // readable.
     .sort((a, b) => a.row - b.row || a.col - b.col);
 }

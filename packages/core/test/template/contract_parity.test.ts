@@ -19,6 +19,18 @@ import { arithIntegerSubtractV1 } from "../../src/templates/arith-integer-subtra
  * concern, so the reference is dev-only and core's `dependencies` key stays
  * absent (design D1). If the two ever disagree about what a well-formed item is,
  * this file goes red rather than a pack builder discovering it at F1.5.
+ *
+ * **`ItemSchema.safeParse` cannot see the payload**, which is why parity is not
+ * asserted through it alone. Its `StimulusEnvelopeSchema` types `payload` as
+ * `z.record(z.string(), z.unknown())`, so any object at all satisfies it — a
+ * parity test built on `ItemSchema` would stay green for a stimulus core made up
+ * entirely. `parseStimulus` is what actually runs the arithmetic payload schema,
+ * and a case below proves it rejects what `ItemSchema` accepts.
+ *
+ * The answer travels the contract's own round trip — rendered by the contract,
+ * then digested by the contract, which refuses anything not already
+ * storage-canonical. A reducing renderer in core, the mistake `rational.ts`
+ * exists to prevent, fails there.
  */
 const PACK_SALT = "00112233445566778899aabbccddeeff";
 
@@ -63,21 +75,13 @@ describe("what core generates, the frozen format accepts", () => {
   });
 
   it("passes the stimulus payload validator, which the item schema does not run", () => {
-    // **`ItemSchema.safeParse` cannot see the payload.** Its
-    // `StimulusEnvelopeSchema` types `payload` as
-    // `z.record(z.string(), z.unknown())`, so any object at all satisfies it —
-    // a parity test built on `ItemSchema` alone would be green for a stimulus
-    // core made up entirely. `parseStimulus` is what actually runs the
-    // arithmetic payload schema, and it is what this asserts.
     for (let seed = 0n; seed < 25n; seed += 1n) {
       const item = asContractItem(generated(seed)) as { stimulus: unknown };
       expect(parseStimulus(item.stimulus), `seed ${seed}`).toBeNull();
     }
   });
 
-  it("the payload check is not vacuous", () => {
-    // The control for the claim above: prove `parseStimulus` rejects a payload
-    // `ItemSchema` would happily accept, so its `null` above means something.
+  it("the control: `parseStimulus` rejects a payload `ItemSchema` happily accepts, so its `null` above means something", () => {
     const nonsense = { kind: "arithmetic", payload: { operator: "?", left: 1, right: 2 } };
     expect(parseStimulus(nonsense)).not.toBeNull();
 
@@ -85,10 +89,7 @@ describe("what core generates, the frozen format accepts", () => {
     expect(ItemSchema.safeParse(stillAnItem).success).toBe(true);
   });
 
-  it("core's exact answer survives the contract's own round trip", () => {
-    // Rendered by the contract, then digested by the contract, which refuses
-    // anything not already storage-canonical. A reducing renderer in core —
-    // the mistake `rational.ts` exists to prevent — would fail here.
+  it("core's exact answer survives the contract's own round trip, so a reducing renderer in core would fail here", () => {
     for (let seed = 0n; seed < 25n; seed += 1n) {
       const item = generated(seed);
       const rendered = renderCanonicalAnswer(item.answer.numerator);

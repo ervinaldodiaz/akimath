@@ -1,3 +1,23 @@
+/**
+ * `cagedCandidate` on its own, held to what its cages claim.
+ *
+ * The batch cannot catch any of this. A wrong target is refused by the
+ * contract, the seed is dropped, and the batch still returns the boards it
+ * asked for — so proposing a bad label is not unsafe, it is a silent collapse
+ * in hit rate, which is worse to diagnose. Only a direct assertion separates a
+ * correct labeller from one that is wrong half the time.
+ *
+ * The labeller carries no guard against a difference of zero, and that is
+ * deliberate: a pair is a cell and an orthogonal neighbour, so it shares a row
+ * or a column, and a Latin square repeats no digit along either. It is
+ * asserted rather than assumed, because the day `grow` stops annexing
+ * *neighbours* the labeller starts emitting an off-schema target.
+ *
+ * Order is part of the payload. The pack is byte-diffed, so a payload whose
+ * shape depended on draw order would make an unrelated regeneration look like
+ * a content change.
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { cagedCandidate } from "../../src/puzzles/caged.js";
@@ -71,12 +91,51 @@ const everyCage = function* (): Generator<{
   }
 };
 
+/**
+ * The smaller value of every quotient cage the sweep saw.
+ *
+ * `a ÷ b` and `a × b` are the same number when `b` is 1, and almost every
+ * divisible pair in a small Latin square contains a 1 — so a sweep that
+ * happened to see only those would pass for a labeller that multiplied.
+ * PROC-10: the case has to be present, not hoped for.
+ */
+const quotientDivisors = (): number[] =>
+  [...everyCage()]
+    .filter(({ cage }) => cage.operation === "÷")
+    .map(({ values }) => Math.min(...values));
+
+/**
+ * Which cage each of the board's two printed cells belongs to.
+ *
+ * Two givens inside one cage pin the cage rather than the board, which is most
+ * of the reason an authored magic square was once refused as
+ * `solution_not_unique`. Distinct *cells* is not the same property, and a
+ * picker that always chose the same cage would satisfy that one.
+ */
+function cagesOfThePrintedCells(payload: KenKenPayload): number[] {
+  return payload.board.given.map((cell) =>
+    payload.cages.findIndex((cage) =>
+      cage.cells.some((c) => c.row === cell.row && c.col === cell.col),
+    ),
+  );
+}
+
+/**
+ * Two neighbouring seeds' candidates, serialized.
+ *
+ * The square, the cages and the labels are drawn off derived seeds rather than
+ * one stream: three decisions off one stream would each be a function of the
+ * ones before it. The observable consequence — two seeds sharing a square do
+ * not share a partition — cannot be asserted directly, so what is asserted is
+ * the weaker thing that would break first: neighbouring seeds are unrelated.
+ */
+const neighbouringSeeds = (): readonly [string, string] => [
+  JSON.stringify(cagedCandidate("kenken", 100n, 5)),
+  JSON.stringify(cagedCandidate("kenken", 101n, 5)),
+];
+
 describe("a KenKen cage says what its cells actually do", () => {
   it("every target is the operation applied to the solution", () => {
-    // The batch cannot catch this: a wrong target is refused by the contract,
-    // the seed is dropped, and the batch still returns the boards it asked for.
-    // Only a direct assertion separates a correct labeller from one that is
-    // wrong half the time.
     for (const { seed, size, cage, values } of everyCage()) {
       expect(cage.target, `${size}×${size} seed ${seed}: ${cage.operation} over ${values}`).toBe(
         applied(cage.operation, values),
@@ -85,15 +144,7 @@ describe("a KenKen cage says what its cells actually do", () => {
   }, 120_000);
 
   it("a quotient by something other than one is among the cases checked", () => {
-    // `a / b` and `a * b` are the same number when `b` is 1, and almost every
-    // divisible pair in a small Latin square contains a 1 — so a sweep that
-    // happened to see only those would pass for a labeller that multiplied.
-    // PROC-10: the case has to be present, not hoped for.
-    const divisors = [...everyCage()]
-      .filter(({ cage }) => cage.operation === "÷")
-      .map(({ values }) => Math.min(...values));
-
-    expect(divisors.filter((b) => b > 1).length).toBeGreaterThan(0);
+    expect(quotientDivisors().filter((b) => b > 1).length).toBeGreaterThan(0);
   }, 120_000);
 
   it("a one-cell cage prints its value with a plus", () => {
@@ -107,8 +158,6 @@ describe("a KenKen cage says what its cells actually do", () => {
   });
 
   it("a difference or a quotient is only ever offered on a pair", () => {
-    // The contract rejects `binary_cage_size`, so proposing one is not unsafe
-    // — it is a silent collapse in hit rate, which is worse to diagnose.
     for (const { cage } of everyCage()) {
       if (cage.operation === "-" || cage.operation === "÷") {
         expect(cage.cells).toHaveLength(2);
@@ -117,11 +166,6 @@ describe("a KenKen cage says what its cells actually do", () => {
   }, 120_000);
 
   it("a two-cell cage never holds the same digit twice", () => {
-    // This is why the labeller carries no guard against a difference of zero:
-    // a pair is a cell and an orthogonal neighbour, so it shares a row or a
-    // column, and a Latin square repeats no digit along either. Asserted rather
-    // than assumed, because the day `grow` stops annexing *neighbours* the
-    // labeller starts emitting an off-schema target.
     for (const { cage, values } of everyCage()) {
       if (cage.cells.length === 2) {
         expect(new Set(values).size).toBe(2);
@@ -129,9 +173,7 @@ describe("a KenKen cage says what its cells actually do", () => {
     }
   }, 120_000);
 
-  it("a target is always at least one", () => {
-    // `KenKenPayloadSchema` requires it, and equal values in one cage make a
-    // difference of zero — which a Latin square happily produces.
+  it("a target is always at least one, as KenKenPayloadSchema requires", () => {
     for (const seed of SEEDS) {
       for (const cage of kenken(seed).cages) {
         expect(cage.target).toBeGreaterThanOrEqual(1);
@@ -148,9 +190,7 @@ describe("a KenKen cage says what its cells actually do", () => {
     }
   });
 
-  it("all four operations get used", () => {
-    // The option list would otherwise be dead code: a labeller that only ever
-    // returned `+` passes every assertion above.
+  it("all four operations get used, or the option list is dead code", () => {
     const seen = new Set([...everyCage()].map(({ cage }) => cage.operation));
     expect([...seen].sort()).toEqual(["+", "-", "×", "÷"].sort());
   }, 120_000);
@@ -216,18 +256,9 @@ describe("the board the cages describe", () => {
   });
 
   it("the two printed cells come from different cages", () => {
-    // Two givens inside one cage pin the cage rather than the board, which is
-    // most of the reason an authored magic square was once refused as
-    // `solution_not_unique`. Distinct *cells* is not the same property, and a
-    // picker that always chose the same cage would satisfy that one.
     for (const size of SIZES) {
       for (const seed of SEEDS) {
-        const payload = kenken(seed, size);
-        const cageOf = (cell: Cell): number =>
-          payload.cages.findIndex((cage) =>
-            cage.cells.some((c) => c.row === cell.row && c.col === cell.col),
-          );
-        const cages = payload.board.given.map(cageOf);
+        const cages = cagesOfThePrintedCells(kenken(seed, size));
 
         expect(new Set(cages).size, `${size}×${size} seed ${seed}`).toBe(cages.length);
       }
@@ -235,8 +266,6 @@ describe("the board the cages describe", () => {
   }, 120_000);
 
   it("the printed cells come in a stable order", () => {
-    // The pack is byte-diffed, so a payload whose shape depended on draw order
-    // would make an unrelated regeneration look like a content change.
     for (const seed of SEEDS) {
       const given = kenken(seed).board.given;
       const sorted = [...given].sort((a, b) => a.row - b.row || a.col - b.col);
@@ -262,13 +291,8 @@ describe("a candidate is a function of its seed", () => {
   });
 
   it("the square, the cages and the labels do not move together", () => {
-    // Three decisions drawn off one stream would make each a function of the
-    // ones before it. They are drawn off derived seeds instead, and the
-    // observable consequence is that two seeds sharing a square do not share a
-    // partition — which this cannot assert directly, so it asserts the weaker
-    // thing that would break first: neighbouring seeds are unrelated.
-    const a = JSON.stringify(cagedCandidate("kenken", 100n, 5));
-    const b = JSON.stringify(cagedCandidate("kenken", 101n, 5));
+    const [a, b] = neighbouringSeeds();
+
     expect(a).not.toBe(b);
   });
 });

@@ -30,15 +30,21 @@ export interface AuthoredSource {
   readonly kind: "authored";
   /** Relative to the declaration's own location, so a declaration is portable. */
   readonly path: string;
+  /**
+   * An authored file carries no template, so nothing else can say which skill
+   * its items belong to.
+   */
   readonly skillId: number;
 }
 
-/// Puzzles read from a hand-authored file.
-///
-/// **Boards are authored, never generated** — `CLAUDE.md` says so and the
-/// reason is where the work goes: proving a board has exactly one solution is a
-/// search, and it belongs here, once, rather than on a phone before a player
-/// can start.
+/**
+ * Puzzles read from a hand-authored file.
+ *
+ * **Boards are authored, never generated** — `CLAUDE.md` says so and the
+ * reason is where the work goes: proving a board has exactly one solution is a
+ * search, and it belongs here, once, rather than on a phone before a player
+ * can start.
+ */
 export interface PuzzleSource {
   readonly kind: "puzzles";
   /** Relative to the declaration, like an authored item source. */
@@ -114,6 +120,13 @@ function requireInt(
 const INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{3}Z$/u;
 
+/**
+ * How long each month is, with February allowed 29 every year.
+ *
+ * A declaration is authored by hand and read again by the frozen schema;
+ * leap-year arithmetic here would be a second implementation of a calendar for
+ * no gain.
+ */
 const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
 
 function requireInstant(from: Record<string, unknown>, field: string): string {
@@ -123,9 +136,6 @@ function requireInstant(from: Record<string, unknown>, field: string): string {
     fail(field, "must be an ISO 8601 instant in UTC, e.g. 2026-08-18T00:00:00.000Z");
   }
   const [, , month, day, hour, minute, second] = parts.map(Number) as number[];
-  // February is allowed 29 every year. A declaration is authored by hand and
-  // read again by the frozen schema; leap-year arithmetic here would be a
-  // second implementation of a calendar for no gain.
   const monthLength = DAYS_IN_MONTH[(month as number) - 1];
   const sane =
     (month as number) >= 1 &&
@@ -142,35 +152,43 @@ function requireInstant(from: Record<string, unknown>, field: string): string {
   return raw;
 }
 
+/**
+ * **No `skill_id` on a template source.** The template knows which skill it
+ * exercises (`Template.skillId`), and `build.ts` resolves it from the
+ * registry. A declaration that states it too is a second place to be wrong,
+ * and the wrong one would be the pack's — items filed under a skill their
+ * template does not exercise, rated against the wrong `user_skills` row.
+ * Refused rather than ignored: an ignored field looks like it works.
+ */
+function refuseSkillIdOnTemplateSource(raw: Record<string, unknown>): void {
+  if (raw["skill_id"] !== undefined) {
+    fail(
+      "skill_id",
+      "belongs to the template, not to the source that runs it; remove it",
+    );
+  }
+}
+
+/**
+ * One declared source, by its `kind`.
+ *
+ * `ladder_step` is held to 1–20, matching the frozen item schema. A step
+ * outside it produces items the validator refuses, and finding that out at
+ * emit time is slower than finding it out here.
+ */
 function parseSource(value: unknown, index: number): Source {
   const raw = object(value, `sources[${index}]`);
   switch (raw["kind"]) {
     case "template":
-      // **No `skill_id` here.** The template knows which skill it exercises
-      // (`Template.skillId`), and `build.ts` resolves it from the registry. A
-      // declaration that states it too is a second place to be wrong, and the
-      // wrong one would be the pack's — items filed under a skill their
-      // template does not exercise, rated against the wrong `user_skills` row.
-      // Refused rather than ignored: an ignored field looks like it works.
-      if (raw["skill_id"] !== undefined) {
-        fail(
-          "skill_id",
-          "belongs to the template, not to the source that runs it; remove it",
-        );
-      }
+      refuseSkillIdOnTemplateSource(raw);
       return {
         kind: "template",
         templateId: requireString(raw, "template_id"),
         templateVersion: requireInt(raw, "template_version", 1, Number.MAX_SAFE_INTEGER),
-        // 1–20, matching the frozen item schema. A step outside it produces
-        // items the validator refuses, and finding that out at emit time is
-        // slower than finding it out here.
         ladderStep: requireInt(raw, "ladder_step", 1, 20),
         count: requireInt(raw, "count", 1, 1000),
       };
     case "authored":
-      // An authored file carries no template, so nothing else can say which
-      // skill its items belong to.
       return {
         kind: "authored",
         path: requireString(raw, "path"),

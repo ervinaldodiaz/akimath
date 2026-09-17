@@ -33,13 +33,11 @@ const GLICKMAN_OUTCOMES: readonly Outcome[] = [
 describe("Glickman's own worked example", () => {
   const after = rateSession(GLICKMAN_PLAYER, GLICKMAN_OUTCOMES);
 
-  it("reaches the rating he publishes", () => {
-    // He rounds to 1464 in the paper.
+  it("reaches the rating he publishes, which he rounds to 1464 in the paper", () => {
     expect(Math.round(after.rating)).toBe(1464);
   });
 
-  it("reaches the deviation he publishes", () => {
-    // 151.4, to one decimal.
+  it("reaches the deviation he publishes, 151.4 to one decimal", () => {
     expect(Math.round(after.deviation * 10) / 10).toBeCloseTo(151.4, 1);
   });
 
@@ -48,9 +46,7 @@ describe("Glickman's own worked example", () => {
     expect(INITIAL_DEVIATION).toBe(350);
   });
 
-  it("the prior a caller gets is assembled from those two and nothing else", () => {
-    // The server asks for this rather than for the constants, because the
-    // package's front door exports only functions.
+  it("the prior a caller gets is assembled from those two and nothing else, since the front door exports only functions", () => {
     expect(initialSkill()).toEqual({
       rating: INITIAL_RATING,
       deviation: INITIAL_DEVIATION,
@@ -68,22 +64,15 @@ describe("Glickman's own worked example", () => {
 
 describe("a session is one rating period, not a sequence of them", () => {
   it("rating a batch differs from rating one at a time", () => {
-    // The decision `ARCHITECTURE.md` §3 records: grouping by request is
-    // deterministic but not *consistent* — two children with identical play get
-    // different ratings depending on whether they had a connection, in the app
-    // whose promise is fair adaptive difficulty.
     const batch = rateSession(GLICKMAN_PLAYER, GLICKMAN_OUTCOMES);
 
-    let sequential = GLICKMAN_PLAYER;
-    for (const outcome of GLICKMAN_OUTCOMES) {
-      sequential = rateSession(sequential, [outcome]);
-    }
-
-    expect(batch.rating).not.toBeCloseTo(sequential.rating, 3);
+    expect(batch.rating).not.toBeCloseTo(
+      ratedOneAtATime(GLICKMAN_PLAYER, GLICKMAN_OUTCOMES).rating,
+      3,
+    );
   });
 
-  it("an empty session changes nothing", () => {
-    // No outcomes is not the same as a loss, and it must not move the rating.
+  it("an empty session changes nothing, because no outcomes is not a loss", () => {
     expect(rateSession(GLICKMAN_PLAYER, [])).toEqual(GLICKMAN_PLAYER);
   });
 
@@ -96,9 +85,7 @@ describe("a session is one rating period, not a sequence of them", () => {
     expect(lost.rating).toBeLessThan(1500);
   });
 
-  it("any outcome sharpens the deviation", () => {
-    // Glickman: game outcomes always decrease RD, because playing is
-    // information. Only time passing increases it.
+  it("any outcome sharpens the deviation, because playing is information and only time passing increases it", () => {
     for (const score of [0, 0.5, 1] as const) {
       const after = rateSession(GLICKMAN_PLAYER, [
         { opponentRating: 1500, opponentDeviation: 200, score },
@@ -107,9 +94,7 @@ describe("a session is one rating period, not a sequence of them", () => {
     }
   });
 
-  it("the order of outcomes within a session does not matter", () => {
-    // A rating period is a set, not a sequence — the sums are commutative, and
-    // if that ever stopped being true the "session" grouping would be a lie.
+  it("the order of outcomes within a session does not matter, because a rating period is a set and not a sequence", () => {
     const reversed = [...GLICKMAN_OUTCOMES].reverse();
     expect(rateSession(GLICKMAN_PLAYER, reversed)).toEqual(
       rateSession(GLICKMAN_PLAYER, GLICKMAN_OUTCOMES),
@@ -118,28 +103,13 @@ describe("a session is one rating period, not a sequence of them", () => {
 });
 
 describe("the result is narrowed to the precision the schema stores", () => {
-  it("both figures survive a float32 round trip unchanged", () => {
-    // `user_skills.rating` and `.deviation` are Postgres `real`. Narrowing here
-    // means what the database stores is exactly what was computed, so a rating
-    // read back and re-rated does not drift.
+  it("both figures survive a float32 round trip unchanged, so a rating read back out of Postgres `real` and re-rated does not drift", () => {
     const after = rateSession(GLICKMAN_PLAYER, GLICKMAN_OUTCOMES);
     expect(Math.fround(after.rating)).toBe(after.rating);
     expect(Math.fround(after.deviation)).toBe(after.deviation);
   });
 
   it("holds against a plausible cross-engine wobble in the transcendentals", () => {
-    // `Math.exp`, `Math.log` and `Math.pow` are implementation-approximated, so
-    // this cannot be byte-exact the way BigInt arithmetic is. It does not need
-    // to be: float32 is coarse enough to absorb far more error than any engine
-    // introduces. Rather than assert that, measure it — perturb the inputs by
-    // an amount larger than a real engine difference and show the stored
-    // figures do not move.
-    const nudge = (value: number, ulps: number): number => {
-      let out = value;
-      for (let i = 0; i < ulps; i += 1) out = nextAfter(out);
-      return out;
-    };
-
     const perturbed = rateSession(GLICKMAN_PLAYER, [
       { opponentRating: nudge(1400, 8), opponentDeviation: 30, score: 1 },
       { opponentRating: 1550, opponentDeviation: nudge(100, 8), score: 0 },
@@ -150,6 +120,38 @@ describe("the result is narrowed to the precision the schema stores", () => {
     expect(perturbed).toEqual(clean);
   });
 });
+
+/**
+ * The same outcomes rated one at a time, the shape a rating period must *not*
+ * take.
+ *
+ * `ARCHITECTURE.md` §3 records the decision: grouping by request is
+ * deterministic but not *consistent* — two players with identical play would
+ * get different ratings depending on whether they had a connection, in the app
+ * whose promise is fair adaptive difficulty.
+ */
+function ratedOneAtATime(skill: Skill, outcomes: readonly Outcome[]): Skill {
+  let sequential = skill;
+  for (const outcome of outcomes) {
+    sequential = rateSession(sequential, [outcome]);
+  }
+  return sequential;
+}
+
+/**
+ * `value` moved `ulps` representable doubles upwards.
+ *
+ * `Math.exp`, `Math.log` and `Math.pow` are implementation-approximated, so the
+ * rating cannot be byte-exact the way BigInt arithmetic is. It does not need to
+ * be: float32 is coarse enough to absorb far more error than any engine
+ * introduces. Rather than assert that, perturb the inputs by an amount larger
+ * than a real engine difference and show the stored figures do not move.
+ */
+function nudge(value: number, ulps: number): number {
+  let out = value;
+  for (let i = 0; i < ulps; i += 1) out = nextAfter(out);
+  return out;
+}
 
 /** The next representable double above `value`. */
 function nextAfter(value: number): number {

@@ -29,21 +29,35 @@ function walk(seed: bigint, steps: number): bigint[] {
   return out;
 }
 
-const SEEDS: readonly bigint[] = [
-  0n,
-  1n,
-  9223372036854775808n, // 2^63
-  18446744073709551615n, // 2^64 − 1, where the counter wraps
-  -1n,
+/** The extremes of the seed range, each named by the case it covers. */
+const SEEDS: ReadonlyArray<{ name: string; seed: bigint }> = [
+  { name: "zero", seed: 0n },
+  { name: "one", seed: 1n },
+  { name: "2^63", seed: 9223372036854775808n },
+  {
+    name: "2^64 − 1, where the counter wraps",
+    seed: 18446744073709551615n,
+  },
+  { name: "-1", seed: -1n },
 ];
+
+/**
+ * Far enough out that the counter's *multiplication* wraps, not merely its
+ * addition.
+ *
+ * `seed + (index + 1)·Γ` already exceeds 2^64 long before index 20 for a large
+ * seed, so only a distant index reaches the case a missing mask would first
+ * show.
+ */
+const INDEX_PAST_THE_MULTIPLICATION_WRAP = 1_000_000;
 
 describe("the indexed word equals the walked word", () => {
   it("holds for twenty steps at every extreme of the seed range", () => {
     let compared = 0;
-    for (const seed of SEEDS) {
+    for (const { name, seed } of SEEDS) {
       const walked = walk(seed, 20);
       for (const [index, word] of walked.entries()) {
-        expect(wordAt(seed, index), `seed ${seed} step ${index}`).toBe(word);
+        expect(wordAt(seed, index), `seed ${name} step ${index}`).toBe(word);
         compared += 1;
       }
     }
@@ -53,11 +67,8 @@ describe("the indexed word equals the walked word", () => {
   });
 
   it("holds where the counter itself wraps past 2^64", () => {
-    // seed + (index+1)·Γ exceeds 2^64 long before index 20 for a large seed;
-    // this pins the case where the *multiplication* wraps rather than the
-    // addition, which is where a missing mask would first show.
     const seed = 18446744073709551615n;
-    const far = 1_000_000;
+    const far = INDEX_PAST_THE_MULTIPLICATION_WRAP;
     expect(wordAt(seed, far)).toBe(
       mix64((seed + BigInt(far + 1) * GAMMA) & MASK64),
     );
@@ -68,9 +79,7 @@ describe("the indexed word equals the walked word", () => {
     expect(() => wordAt(0n, 1.5)).toThrow(RangeError);
   });
 
-  it("different indices give different words", () => {
-    // The control: every assertion above is satisfied by a function that
-    // ignores its index and returns a constant.
+  it("different indices give different words, which a function ignoring its index would not", () => {
     const words = new Set(Array.from({ length: 50 }, (_, i) => wordAt(7n, i)));
     expect(words.size).toBe(50);
   });

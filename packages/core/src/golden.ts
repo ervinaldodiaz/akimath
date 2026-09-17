@@ -9,11 +9,16 @@ import { CORE_REGISTRY } from "./templates/index.js";
  * version impossible to land quietly: a version is frozen history, so any diff
  * here on an existing row is a defect rather than an update.
  */
-/** Seeds spanning the signed range, including both extremes. */
+/**
+ * Seeds spanning the signed range, including both extremes.
+ *
+ * `389n` is not an arbitrary middle value: it is the seed that reproduces the
+ * shipped `sub-2`.
+ */
 export const SEED_LADDER: readonly bigint[] = [
   0n,
   1n,
-  389n, // the seed that reproduces the shipped `sub-2`
+  389n,
   9223372036854775807n,
   -9223372036854775808n,
 ];

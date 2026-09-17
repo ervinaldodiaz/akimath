@@ -7,6 +7,17 @@ import { describe, expect, it } from "vitest";
 import { liftAuthored, readAuthoredFile } from "../../src/pack/lift.js";
 import { AUTHORED_PACK_PATH } from "../authored-pack.js";
 
+/**
+ * The lift turns the app's authored content into the frozen envelope.
+ *
+ * Two hazards run through the whole file. A digest assertion has to be about
+ * *this* answer rather than about a well-shaped string — the falsification pass
+ * found that hashing a constant satisfied a `/^[0-9a-f]{64}$/` assertion, which
+ * is every property except the one a digest exists for. And a value the lift is
+ * handed everywhere else, `skillId` 1 most of all, has to be varied in at least
+ * one case, or hardcoding it passes the whole suite.
+ */
+
 const SALT = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
 const lift = (item: unknown) => liftAuthored(item, { skillId: 1, packSalt: SALT });
 
@@ -17,6 +28,23 @@ const payloadOf = (item: unknown): Record<string, unknown> =>
 /** The file the app actually ships. Read, not copied — see the group below. */
 const AUTHORED = AUTHORED_PACK_PATH;
 
+/**
+ * The app spells an expression as a token list because that is what its
+ * compositor draws; the frozen payload spells it structurally. All twenty
+ * authored items are exactly `term operator term =`, so the translation is
+ * total rather than best-effort.
+ *
+ * **The minus sign is two marks, and only one of them is authored content.**
+ * The app draws U+2212, which is the correct typographic mark, and the frozen
+ * operator set is the ASCII hyphen; the Dart reader translates the other way,
+ * and this group is its counterpart. No fixture exercises subtraction, so
+ * without it the pair could drift. The hyphen itself is refused, where this
+ * used to accept both spellings and map them to the frozen `-`: an authored
+ * prompt carries the glyph it draws, and the hyphen is the contract's *name*
+ * for subtraction rather than the mark. Accepting it would let
+ * `npm run build:pack` succeed on a file the app cannot read — the same format,
+ * two doors, disagreeing about what may go through.
+ */
 describe("an authored arithmetic item becomes a frozen envelope", () => {
   const authored = {
     id: "a1",
@@ -31,10 +59,6 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
   };
 
   it("becomes left, operator and right", () => {
-    // The app spells an expression as a token list because that is what its
-    // compositor draws. The frozen payload spells it structurally. All twenty
-    // authored items are exactly `term operator term =`, so the translation is
-    // total rather than best-effort.
     expect(lift(authored).stimulus).toEqual({
       kind: "arithmetic",
       payload: {
@@ -59,10 +83,6 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
   });
 
   it("translates the minus sign the app draws into the one the contract froze", () => {
-    // The app uses U+2212, which is the correct typographic mark; the frozen
-    // operator set is the ASCII hyphen. The Dart reader translates the other
-    // way, and this is its counterpart. No fixture exercises subtraction, so
-    // without this the pair could drift.
     const minus = { ...authored, answer: "1", prompt: [
       { kind: "text", value: "9" },
       { kind: "operator", glyph: "−" },
@@ -73,12 +93,6 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
   });
 
   it("refuses the ASCII hyphen, which is a name and not a mark", () => {
-    // This used to accept both spellings and map them to the frozen `-`. The
-    // app's authored reader refuses U+002D — an authored prompt carries the
-    // glyph it draws, and the hyphen is the contract's *name* for subtraction
-    // rather than the mark. Accepting it here would let `npm run build:pack`
-    // succeed on a file the app cannot read: the same format, two doors,
-    // disagreeing about what may go through.
     const item = { ...authored, answer: "1", prompt: [
       { kind: "text", value: "9" },
       { kind: "operator", glyph: "-" },
@@ -88,13 +102,9 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
     expect(() => lift(item)).toThrow(TypeError);
   });
 
-  it("carries the answer as a digest and never in the clear", () => {
+  it("carries the answer as a digest of its own value, never in the clear", () => {
     const item = lift(authored);
     expect(item.answer.shape).toBe("fraction");
-    // **The digest of *this* answer, not merely a well-shaped digest.** The
-    // falsification pass found that: hashing a constant satisfied a
-    // `/^[0-9a-f]{64}$/` assertion, which is every property except the one the
-    // digest exists for.
     expect(item.answer.digest).toBe(answerDigest(SALT, "5/4"));
     expect(JSON.stringify(item)).not.toContain("5/4");
   });
@@ -104,8 +114,7 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
     expect(other.answer.digest).not.toBe(lift(authored).answer.digest);
   });
 
-  it("gives the same answer different digests under different salts", () => {
-    // The salt is what stops a digest from being a lookup table across packs.
+  it("gives one answer different digests under different salts, ruling out a lookup table", () => {
     const elsewhere = liftAuthored(authored, {
       skillId: 1,
       packSalt: "00112233445566778899aabbccddeeff",
@@ -114,8 +123,6 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
   });
 
   it("adds the envelope fields and nothing else", () => {
-    // A skill that is not 1, because the lift is called with 1 everywhere else
-    // and hardcoding it passed the whole suite.
     expect(liftAuthored(authored, { skillId: 7, packSalt: SALT }).skill_id).toBe(7);
     const item = lift(authored);
     expect(item.skill_id).toBe(1);
@@ -128,6 +135,12 @@ describe("an authored arithmetic item becomes a frozen envelope", () => {
   });
 });
 
+/**
+ * A non-arithmetic stimulus passes through untouched.
+ *
+ * The lift is an envelope problem. Touching one of these payloads here would
+ * mean two places decide what a matrix is.
+ */
 describe("a non-arithmetic stimulus passes through untouched", () => {
   const kinds = [
     ["numberSeries", { terms: [2, 4, 8, 16, 32], unknown_index: 4 }],
@@ -142,18 +155,19 @@ describe("a non-arithmetic stimulus passes through untouched", () => {
       const stimulus = { kind, payload };
       const item = lift({ id: kind, ladder_step: 2, answer: "7", stimulus });
 
-      // The lift is an envelope problem. Touching a payload here would mean
-      // two places decide what a matrix is.
       expect(item.stimulus).toEqual(stimulus);
       expect(ItemSchema.safeParse(item).success).toBe(true);
     });
   }
 });
 
+/**
+ * Refused where it is read, because every alternative is silent. A digest taken
+ * over an answer that is not storage-canonical grades a right answer wrong, on
+ * a device, with nothing reporting an error.
+ */
 describe("content the frozen format cannot accept fails where it is read", () => {
   it("refuses an answer that is not storage-canonical", () => {
-    // A digest over a non-canonical answer grades a right answer wrong, on a
-    // device, with nothing reporting an error.
     expect(() => lift({ id: "bad", ladder_step: 1, answer: " 007 ", stimulus: {
       kind: "numberSeries", payload: { terms: [1, 2, 3], unknown_index: 0 },
     } })).toThrow(/bad/);
@@ -188,11 +202,15 @@ describe("content the frozen format cannot accept fails where it is read", () =>
   });
 });
 
+/**
+ * The whole shipped authored file lifts.
+ *
+ * **Read, not copied.** A fixture copy would let the app's real content drift
+ * from what this proves liftable, and the drift would surface as a pack that no
+ * longer matches the game. This is the assertion that keeps one source of truth
+ * while two formats coexist.
+ */
 describe("the whole shipped authored file lifts", () => {
-  // **Read, not copied.** A fixture copy would let the app's real content drift
-  // from what this proves liftable, and the drift would surface as a pack that
-  // no longer matches the game. This is the assertion that keeps one source of
-  // truth while two formats coexist.
   const items = readAuthoredFile(readFileSync(AUTHORED, "utf8"));
 
   it("every item is accepted by the frozen item schema", () => {
@@ -207,8 +225,7 @@ describe("the whole shipped authored file lifts", () => {
     expect(lifted.length).toBeGreaterThan(0);
   });
 
-  it("covers every stimulus family, and reports the breakdown", () => {
-    // PROC-10: a lift that silently dropped items would pass the check above.
+  it("covers every stimulus family, reporting a breakdown a silent drop cannot pass", () => {
     const byKind = new Map<string, number>();
     for (const item of items) {
       const kind = (item as { stimulus?: { kind: string } }).stimulus?.kind ?? "arithmetic";
