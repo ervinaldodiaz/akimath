@@ -23,34 +23,38 @@ import 'support/launch.dart';
 /// `ACIERTOS`, `PROMEDIO` and `HISTORIAL` are absent here because this device
 /// has answered nothing that counts, which is now true by construction rather
 /// than by whatever the handset was holding.
+///
+/// **The figures are checked on `Perfil`, not on a root of their own.** `Avance`
+/// was invented because the shell needed a second root; no document draws a
+/// progress screen, and every line it held is a line `4.1` puts under the
+/// identity.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('a player can reach every root and the stack above one', (WidgetTester tester) async {
     await launchOnAFreshInstall(tester);
 
-    // The bar exists because a second root does.
-    expect(find.text('Inicio'), findsOneWidget);
-    // **`Mapa` is the third**, and it is on the bar rather than merely built:
-    // `05 MAPA` and `Detalle de nodo` were merged fully tested with nothing
-    // that opened either.
-    expect(find.text('Mapa'), findsOneWidget);
-    // **`Perfil`, not `Ajustes`.** Declared rule 1 names the bar's homes as
-    // *inicio, mapa, progreso y perfil*; the third root was labelled after a
-    // settings screen, which that rule does not name.
+    expect(find.text('Inicio'), findsOneWidget,
+        reason: 'the bar exists at all because a second root does');
+    expect(find.text('Mapa'), findsOneWidget,
+        reason: 'Mapa is on the bar rather than merely built: 05 MAPA and '
+            'Detalle de nodo were merged fully tested with nothing that '
+            'opened either');
     expect(find.text('Perfil'), findsOneWidget);
-    expect(find.text('Ajustes'), findsNothing);
-    // And no `Avance`: it absorbed into the profile, which is where the design
-    // draws what it held.
-    expect(find.text('Avance'), findsNothing);
+    expect(find.text('Ajustes'), findsNothing,
+        reason: 'declared rule 1 names the bar\'s homes as inicio, mapa, '
+            'progreso y perfil; the third root was labelled after a settings '
+            'screen, which that rule does not name');
+    expect(find.text('Avance'), findsNothing,
+        reason: 'it absorbed into the profile, which is where the design draws '
+            'what it held');
 
-    // **And each root carries a mark, not just a word.** A mark that stopped
-    // rendering would leave the labels in place and look like a spacing change.
     final Finder marks =
         find.descendant(of: find.byType(NavBar), matching: find.byType(BrandIcon));
-    expect(marks, findsNWidgets(3), reason: 'one mark per root');
+    expect(marks, findsNWidgets(3),
+        reason: 'one mark per root, and a mark that stopped rendering would '
+            'leave the labels in place and look like a spacing change');
 
-    // The map opens from the bar, on a real device, at the real text setting.
     await tester.tap(find.text('Mapa'));
     await tester.pumpAndSettle();
     expect(find.byType(SkillMapScreen), findsOneWidget);
@@ -60,55 +64,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    // The gear opens the stack, and the bar is still under it — the group badge
-    // over 4.1–4.7 says so: *"Aquí sí va la barra inferior."*
     await tester.tap(find.bySemanticsLabel('Ajustes'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsListScreen), findsOneWidget);
-    expect(find.byType(NavBar), findsOneWidget, reason: 'the bar left with the push');
+    expect(find.byType(NavBar), findsOneWidget,
+        reason: 'the bar left with the push, and the group badge over 4.1–4.7 '
+            'says it must not: "Aquí sí va la barra inferior"');
 
     await tester.tap(find.text('Cómo se leen los retos'));
     await tester.pumpAndSettle();
     expect(find.byType(LegendScreen), findsOneWidget);
-    // The legend's own words, which `fix-verdict-copy` changed from `Acierto`
-    // and `Se torció`. This suite kept the old pair for weeks because nothing
-    // ran it — `flutter test` does not reach `integration_test/`.
-    expect(find.text('¡Bien hecho!'), findsOneWidget);
+    expect(find.text('¡Bien hecho!'), findsOneWidget,
+        reason: 'the legend\'s own words, which fix-verdict-copy changed from '
+            'Acierto and Se torció; this suite kept the old pair for weeks '
+            'because nothing ran it');
     expect(find.text('Casi'), findsOneWidget);
 
-    // Back out of the stack, twice, and the profile is still there.
     await tester.tap(find.bySemanticsLabel('Volver'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Volver'));
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    // **The figures are here, not on a root of their own.** `Avance` was
-    // invented because the shell needed a second root; no document draws a
-    // progress screen, and every line it held is a line `4.1` puts under the
-    // identity.
-    //
-    // **Every figure here is now one the device can prove, on a real phone.**
-    // The wide card reads `DÍAS` because nothing hands over a rating any more:
-    // `GET /me/standing` answers a rating *per skill* and there is no single
-    // number to print, so the slot falls back to the days practised rather
-    // than to an invented `1 248`.
-    expect(find.text('DÍAS'), findsOneWidget);
+    expect(find.text('DÍAS'), findsOneWidget,
+        reason: 'the wide card reads DÍAS because nothing hands over a rating '
+            'any more: GET /me/standing answers one per skill and there is no '
+            'single number to print, so the slot falls back to the days '
+            'practised rather than to an invented 1 248');
     expect(find.text('RACHA'), findsOneWidget);
     expect(find.text('RETOS'), findsOneWidget);
     expect(find.text('RATING'), findsNothing);
     expect(find.textContaining('esta semana'), findsNothing);
 
-    // **Absent, not zero.** This device has answered nothing that counts — the
-    // teaching item deliberately records no answer — so accuracy and mean time
-    // have nothing behind them and their tiles are simply not drawn. `0 %`
-    // here would tell a new player they got everything wrong.
-    expect(find.text('ACIERTOS'), findsNothing);
+    expect(find.text('ACIERTOS'), findsNothing,
+        reason: 'absent, not zero: this device has answered nothing that '
+            'counts — the teaching item deliberately records no answer — and '
+            '0 % would tell a new player they got everything wrong');
     expect(find.text('PROMEDIO'), findsNothing);
-    // No account on a fresh install, so there is no history section at all —
-    // a `HISTORIAL` nothing can ever fill is a promise the product cannot keep
-    // while nothing syncs.
-    expect(find.text('HISTORIAL'), findsNothing);
+    expect(find.text('HISTORIAL'), findsNothing,
+        reason: 'no account on a fresh install, and a HISTORIAL nothing can '
+            'ever fill is a promise the product cannot keep while nothing '
+            'syncs');
 
     await tester.tap(find.text('Inicio'));
     await tester.pumpAndSettle();

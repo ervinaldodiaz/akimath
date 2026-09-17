@@ -89,7 +89,6 @@ void main() {
     );
     expect(pad, findsOneWidget, reason: 'never reached a keypad');
 
-    // At rest: the shadow is there, hard, and offset by the tile's own figure.
     final BoxDecoration resting = _decorationOfKey(tester, '7');
     expect(resting.boxShadow, hasLength(1));
     expect(resting.boxShadow!.single.offset, BrandShape.shadowTile);
@@ -97,7 +96,6 @@ void main() {
     expect(resting.boxShadow!.single.spreadRadius, 0);
     final Offset restingAt = _paintedTopLeftOfKey(tester, '7');
 
-    // Held.
     final TestGesture gesture = await tester.startGesture(tester.getCenter(pad));
     await tester.pump();
 
@@ -106,12 +104,14 @@ void main() {
       isEmpty,
       reason: 'the shadow should be gone, not merely smaller',
     );
-    // **The travel is the shadow's own offset**, so a surface with a deeper
-    // shadow sinks further. Measured here rather than assumed, because that is
-    // the relationship a fixed number would break.
-    expect(_paintedTopLeftOfKey(tester, '7') - restingAt, BrandShape.shadowTile);
+    expect(
+      _paintedTopLeftOfKey(tester, '7') - restingAt,
+      BrandShape.shadowTile,
+      reason: 'the travel is the shadow\'s own offset, so a surface with a '
+          'deeper shadow sinks further — measured against the token rather '
+          'than a fixed number, which is the relationship that would break',
+    );
 
-    // Released.
     await gesture.up();
     await tester.pumpAndSettle();
 
@@ -119,24 +119,14 @@ void main() {
     expect(_paintedTopLeftOfKey(tester, '7'), restingAt);
   });
 
-  testWidgets('and a key that is unavailable does not travel under a thumb',
-      (WidgetTester tester) async {
-    // The control. Without it, "held keys sink" passes for a pad where every
-    // key sinks, including the ones a player must not be able to use.
-    //
-    // **It keeps its `PressableSurface`**, and it has to: the key keeps its
-    // size, radius and resting shadow so the pad does not reflow when a key
-    // becomes unavailable. `IgnorePointer` above it is what stops the press
-    // arriving. The widget's own comment claimed the surface was absent; it
-    // never was, and this is what found the two out of step.
+  testWidgets('and a key that is unavailable does not travel under a thumb, '
+      'which the case above passes without', (WidgetTester tester) async {
     await _reachTheRoundKeypad(tester);
 
     final Finder unavailable = find.byWidgetPredicate(
       (Widget w) => w is KeypadKeyView && !w.available,
     );
     if (unavailable.evaluate().isEmpty) {
-      // The item pad offers every digit, so there may be none here. Reported
-      // rather than skipped silently: a control that never runs is not one.
       debugPrint('  press travel · no unavailable key on this pad; control not exercised');
       return;
     }
@@ -144,7 +134,12 @@ void main() {
     expect(
       find.descendant(of: unavailable.first, matching: find.byType(IgnorePointer)),
       findsWidgets,
-      reason: 'an unavailable key is protected by IgnorePointer, not by absence',
+      reason: 'an unavailable key is protected by IgnorePointer, not by '
+          'absence: it keeps its PressableSurface, and has to, so that its '
+          'size, radius and resting shadow stop the pad reflowing when a key '
+          'becomes unavailable. The widget\'s own comment claimed the surface '
+          'was absent; it never was, and this is what found the two out of '
+          'step.',
     );
 
     final KeypadKeyView key = tester.widget<KeypadKeyView>(unavailable.first);

@@ -15,6 +15,12 @@
 /// families only from a cursor of zero, and on a device mid-pack this would
 /// have failed as if the pack had lost a family.
 ///
+/// **Two series, not one, and the reason is coverage.** The pack is interleaved
+/// so all six families appear inside the first ten items — `pack_variety_test`
+/// asserts that against the file — and this is where that claim is cashed on a
+/// real device: every family drawn by the real renderer, its answer typed on
+/// the app's own keypad, and graded.
+///
 /// It is also the thing `docs/decisions/OPEN.md` §7 said was missing: a press
 /// that a machine can perform. Two `f0-*` Tier 2 tasks were open on exactly
 /// that.
@@ -71,6 +77,26 @@ const Map<String, String> _keyFor = <String, String>{
   '/': 'fraction',
 };
 
+/// Opens a series from the home and waits for the round to draw.
+///
+/// **Scrolled to first.** The home is taller than the viewport and
+/// `Empezar la serie` sits below the fold: `tap` on an off-screen widget hits
+/// the coordinates it *would* occupy, the hit test misses, and the failure
+/// reads as "the series never opened" rather than "the button was not visible".
+///
+/// **And budgeted, like the home.** The series reads the bundled pack through
+/// the real asset bundle, which `pumpAndSettle` can return before.
+Future<void> _startTheSeries(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('Empezar la serie'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Empezar la serie'));
+  for (int i = 0; i < 20 && find.byType(RoundScreen).evaluate().isEmpty; i++) {
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+  }
+  expect(find.byType(RoundScreen), findsOneWidget,
+      reason: 'the series never opened');
+}
+
 Future<String> _answerCurrentItem(WidgetTester tester) async {
   final String family = _currentFamily(tester);
   for (final String character in _expectedAnswer(tester).split('')) {
@@ -86,41 +112,17 @@ Future<String> _answerCurrentItem(WidgetTester tester) async {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('a fresh install plays through to a finished series',
-      (WidgetTester tester) async {
+  testWidgets('a fresh install plays through two finished series, which is '
+      'what covers all six families', (WidgetTester tester) async {
     await launchOnAFreshInstall(tester);
 
-    // **Scrolled to first.** The home is taller than the viewport and this
-    // button sits below the fold: `tap` on an off-screen widget hits the
-    // coordinates it *would* occupy, the hit test misses, and the failure looks
-    // like "the series never opened" rather than "the button was not visible".
-    await tester.ensureVisible(find.text('Empezar la serie'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Empezar la serie'));
-    // Budgeted, like the home above: the series reads the bundled pack through
-    // the real asset bundle, which `pumpAndSettle` can return before.
-    for (int i = 0; i < 20 && find.byType(RoundScreen).evaluate().isEmpty; i++) {
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-    }
-    expect(find.byType(RoundScreen), findsOneWidget, reason: 'the series never opened');
+    await _startTheSeries(tester);
 
-    // **Two series, not one, and the reason is coverage.** The pack is
-    // interleaved so all six families appear inside the first ten items —
-    // `pack_variety_test` asserts that against the file — and this is where
-    // that claim is cashed on a real device: every family drawn by the real
-    // renderer, its answer typed on the app's own keypad, and graded.
     final Set<String> answered = <String>{};
 
     for (int series = 0; series < 2; series++) {
       if (series > 0) {
-        // **Scrolled to first.** The home is taller than the viewport and this
-    // button sits below the fold: `tap` on an off-screen widget hits the
-    // coordinates it *would* occupy, the hit test misses, and the failure looks
-    // like "the series never opened" rather than "the button was not visible".
-    await tester.ensureVisible(find.text('Empezar la serie'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Empezar la serie'));
-        await tester.pumpAndSettle();
+        await _startTheSeries(tester);
       }
       expect(find.byType(RoundScreen), findsOneWidget);
 
@@ -131,14 +133,14 @@ void main() {
 
       expect(find.byType(SeriesSummaryScreen), findsOneWidget,
           reason: 'series ${series + 1} did not end');
-      // **The ring on a real device, not `5 de 5`.** The words are the
-      // summary's fallback for a caller handing over no outcomes; the route
-      // hands over the round's, so five items answered are five marks. This
-      // assertion is what caught the wiring being absent on the simulator
-      // while every widget test was green.
       expect(
         tester.widgetList<VerdictRing>(find.byType(VerdictRing)),
         hasLength(5),
+        reason: 'the ring on a real device, not `5 de 5`: the words are the '
+            'summary\'s fallback for a caller handing over no outcomes, and '
+            'the route hands over the round\'s, so five items answered are '
+            'five marks. This is what caught the wiring being absent on the '
+            'simulator while every widget test was green.',
       );
 
       await tester.tap(find.text('Volver al inicio'));

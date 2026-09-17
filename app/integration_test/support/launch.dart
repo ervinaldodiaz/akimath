@@ -109,6 +109,10 @@ Future<void> launchOnAFreshInstall(WidgetTester tester) async {
 /// depending on the content of `assets/packs/starter.json` — verified for the
 /// items this suite actually reaches, and no further.
 ///
+/// **The probe is left rather than finished.** The shipped one is ten items
+/// long and this door is about what the answered ones record, not about
+/// answering ten, so it taps `Saltar` once [answers] are in.
+///
 /// Leaves `0.6 Calibración resultado` on screen — reachable because [answers]
 /// is at least one, which is what `hasSomethingToReport` requires.
 Future<void> launchAndPlayTheProbe(
@@ -132,8 +136,6 @@ Future<void> launchAndPlayTheProbe(
     await tester.pumpAndSettle();
   }
 
-  // Left rather than finished: the shipped probe is ten items long and this
-  // suite is about what the answered ones record, not about answering ten.
   await tester.tap(find.text('Saltar'));
   await _settleUntil(tester, find.byType(CalibrationResultScreen));
   expect(
@@ -149,6 +151,13 @@ Future<void> launchAndPlayTheProbe(
 /// Every screen is checked here so a run that silently skipped one fails at the
 /// skip instead of leaving a suite to discover the consequence three screens
 /// later.
+///
+/// **`0.4` is reached, not merely allowed for.** `OnboardingFlow` reads the pack
+/// in `initState` and `_afterTeachingItem` branches on `_probe.isEmpty` at the
+/// moment of the tap, so a bundle read that had not finished would step over
+/// all three probe screens and land on `0.7`. That is a real outcome worth
+/// failing on rather than absorbing: a first run that teaches and then measures
+/// nothing is not the run the design draws.
 Future<void> _walkToTheProbeIntro(WidgetTester tester) async {
   await establish(DeviceState.freshInstall);
   app.main();
@@ -165,25 +174,27 @@ Future<void> _walkToTheProbeIntro(WidgetTester tester) async {
   await tester.pumpAndSettle();
   expect(find.byType(FirstItemScreen), findsOneWidget);
 
-  // 5 + 8 = 13, the teaching item. The first run completes when it is solved.
-  await pressKey(tester, '1');
-  await pressKey(tester, '3');
-  await pressKey(tester, 'submit');
-  await tester.pumpAndSettle();
+  await _solveTheTeachingItem(tester);
   await tester.tap(find.text('Siguiente'));
 
-  // **`0.4` is reached, not merely allowed for.** `OnboardingFlow` reads the
-  // pack in `initState` and `_afterTeachingItem` branches on `_probe.isEmpty`
-  // at the moment of the tap above, so a bundle read that had not finished
-  // would step over all three probe screens and land on `0.7`. That is a real
-  // outcome worth failing on rather than absorbing: a first run that teaches
-  // and then measures nothing is not the run the design draws.
   await _settleUntil(tester, find.byType(CalibrationIntroScreen));
   expect(
     find.byType(CalibrationIntroScreen),
     findsOneWidget,
     reason: 'Calibración intro follows the teaching item',
   );
+}
+
+/// Types `13` into `0.3 Primer reto` and submits it.
+///
+/// The teaching item is the fixed `5 + 8`, and the first run completes when it
+/// is **solved** — leaving it by the close control or a system back returns to
+/// the welcome and sets nothing, so the answer is not optional here.
+Future<void> _solveTheTeachingItem(WidgetTester tester) async {
+  await pressKey(tester, '1');
+  await pressKey(tester, '3');
+  await pressKey(tester, 'submit');
+  await tester.pumpAndSettle();
 }
 
 /// Starts the app on a device whose first run is behind it.

@@ -89,6 +89,10 @@ class DeviceState {
 /// That is why `streak_notice_tour_test`'s `prefs.clear()` was never doing
 /// anything: it only ever added days on top, so nothing it asserted could tell.
 ///
+/// **The empty string is what stands in for a removal.** Each of the stores
+/// swept below reads one as nothing kept, which is exactly what removing the
+/// key would have produced if removing worked.
+///
 /// **Through the app's own stores and their own keys.** A suite spelling
 /// `'akimath.onboarding_complete.v1'` by hand is a second declaration of a name
 /// the app owns; the settings are reset by handing each store its own
@@ -119,8 +123,6 @@ Future<void> establish(DeviceState state) async {
     PrefsIssuedPackStore.key,
     PrefsAttemptJournalStore.key,
   ]) {
-    // Each of these stores reads an empty string as nothing kept, which is what
-    // a removal would have produced.
     await preferences.setString(key, '');
   }
 
@@ -138,6 +140,13 @@ Future<void> establish(DeviceState state) async {
 /// Not through `SharedPreferencesAsync`: what matters is not that a key holds a
 /// string, it is that the store above it answers the way a fresh install makes
 /// it answer.
+///
+/// **The accessibility settings are read back because they steer what every
+/// other suite measures.** The handset carried `text_size` at step 1 and
+/// `reduce_motion` on, so every Tier 2 run before this change was measuring
+/// layout at a text size nobody chose. `PreferenceValues.putInt` swallows its
+/// failures like every other adapter here, so a write that did not land would
+/// put that back invisibly.
 Future<void> _verify(DeviceState state) async {
   expect(
     await const OnboardingStore().isComplete(),
@@ -184,11 +193,6 @@ Future<void> _verify(DeviceState state) async {
     isEmpty,
     reason: 'a journal from an earlier run is still on the device',
   );
-  // **This one is read back because it steers what the other suites measure.**
-  // The handset carried `text_size` at step 1 and `reduce_motion` on, so every
-  // Tier 2 run before this change was measuring layout at a text size nobody
-  // chose. `PreferenceValues.putInt` swallows its failures like every other
-  // adapter here, so a write that did not land would put that back invisibly.
   expect(
     await const PrefsAccessibilitySettingsStore().read(),
     AccessibilitySettings.defaults,
